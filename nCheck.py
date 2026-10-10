@@ -7,6 +7,43 @@ import time
 import random
 from datetime import datetime
 
+INDUSTRY_PROFILES = {
+    "nCheck": {
+        "cps": {"value": 19.5, "is_error": True},
+        "cpl": {"value": 42, "is_error": True},
+        "min_dur_ms": {"value": 833, "is_error": True},
+        "min_gap_ms": {"value": 84, "is_error": True},
+        "max_lines": {"value": 2, "is_error": True}
+    },
+    "Netflix TR": {
+        "cps": {"value": 17.0, "is_error": True},
+        "cpl": {"value": 42, "is_error": True},
+        "min_dur_ms": {"value": 833, "is_error": True},
+        "min_gap_ms": {"value": 83, "is_error": False},
+        "max_lines": {"value": 2, "is_error": True}
+    },
+    "Amazon PV": {
+        "cps": {"value": 17.0, "is_error": True},
+        "cpl": {"value": 42, "is_error": False},
+        "min_dur_ms": {"value": 1000, "is_error": True},
+        "min_gap_ms": {"value": 83, "is_error": False},
+        "max_lines": {"value": 2, "is_error": True}
+    },
+    "EBU / BBC": {
+        "cps": {"value": 20.0, "is_error": False},
+        "cpl": {"value": 40, "is_error": False},
+        "min_dur_ms": {"value": 1000, "is_error": True},
+        "min_gap_ms": {"value": 83, "is_error": False},
+        "max_lines": {"value": 2, "is_error": True}
+    },
+    "OpenSubtitles": {
+        "cps": {"value": 25.0, "is_error": True},
+        "cpl": {"value": 45, "is_error": False},
+        "min_dur_ms": {"value": 500, "is_error": False},
+        "min_gap_ms": {"value": 24, "is_error": False},
+        "max_lines": {"value": 2, "is_error": True}
+    }
+}
 
 
 from PyQt5.QtWidgets import (QApplication, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout,
@@ -16,46 +53,14 @@ from PyQt5.QtWidgets import (QApplication, QMainWindow, QWidget, QVBoxLayout, QH
                              QListWidget, QListWidgetItem, QSplitter)
 from PyQt5.QtCore import Qt, QThread, pyqtSignal, QTimer
 from PyQt5.QtGui import QFont, QTextDocument, QColor, QPalette
-from PyQt5.QtPrintSupport import QPrinter
+# removed QPrinter import
 
 if getattr(sys, 'frozen', False):
     application_path = os.path.dirname(sys.executable)
 else:
     application_path = os.path.dirname(os.path.abspath(__file__))
 
-CONFIG_FILE = os.path.join(application_path, "nCheck_config.json")
 HISTORY_FILE = os.path.join(application_path, "nCheck_history.json")
-
-def load_config():
-    default_config = {
-        "gemini_url": "https://gemini.google.com/app",
-        "cps": 21.0,
-        "cpl": 38,
-        "flash": 0.7,
-        "zombie": 7.0,
-        "gap": 24,
-        "ell_tol": 5.0,
-        "pen_cps": 1.0,
-        "pen_cpl": 0.5,
-        "pen_dur": 1.0,
-        "pen_gap": 0.2,
-        "pen_ell": 1.0
-    }
-    if os.path.exists(CONFIG_FILE):
-        try:
-            with open(CONFIG_FILE, "r", encoding="utf-8") as f:
-                loaded = json.load(f)
-                default_config.update(loaded)
-        except:
-            pass
-    return default_config
-
-def save_config(config):
-    try:
-        with open(CONFIG_FILE, "w", encoding="utf-8") as f:
-            json.dump(config, f, indent=4, ensure_ascii=False)
-    except:
-        pass
 
 def load_history():
     if os.path.exists(HISTORY_FILE):
@@ -112,11 +117,11 @@ class DragDropLabel(QLabel):
         if self.file_path is not None:
             self.setStyleSheet("""
                 QLabel {
-                    border: 2px solid #30D158;
-                    border-radius: 12px;
+                    border: 2pt solid #30D158;
+                    border-radius: 9pt;
                     background-color: rgba(48, 209, 88, 0.15);
                     color: #FFFFFF;
-                    padding: 20px;
+                    padding: 15pt;
                 }
             """)
         else:
@@ -133,23 +138,20 @@ class DragDropLabel(QLabel):
                     border-radius: 12px;
                     background-color: {bg_color};
                     color: #AEAEB2;
-                    padding: 20px;
+                    padding: 10px;
                 }}
             """)
 
     def refresh_text(self):
         if self.file_path is not None:
+            import os
             file_name = os.path.basename(self.file_path)
             prefix_text = self.main_window.get_text("status_success")
-            self.setText(f"✅ {prefix_text}\n{file_name}")
+            self.setText(prefix_text + chr(10) + file_name)
         else:
             title_text = self.main_window.get_text(self.title_key)
-            if self.is_optional:
-                opt_text = f"({self.main_window.get_text('opt_optional')})"
-            else:
-                opt_text = f"({self.main_window.get_text('opt_required')})"
             drag_text = self.main_window.get_text("drag_hint")
-            self.setText(f"📁\n{title_text}\n{opt_text}\n{drag_text}")
+            self.setText(title_text + chr(10) + drag_text)
 
     def dragEnterEvent(self, event):
         if event.mimeData().hasUrls():
@@ -167,9 +169,7 @@ class DragDropLabel(QLabel):
         if len(urls) > 0:
             file_path = urls[0].toLocalFile()
             if file_path.lower().endswith(('.srt', '.ass')):
-                if hasattr(self.main_window, 'validate_subtitle_language'):
-                    if not self.main_window.validate_subtitle_language(file_path):
-                        return
+
                         
                 self.file_path = file_path
                 self.refresh_text()
@@ -182,7 +182,6 @@ class DragDropLabel(QLabel):
 class GemSubtitleProcessor(QMainWindow):
     def __init__(self):
         super().__init__()
-        self.config = load_config()
         self.history = load_history()
         self.current_lang = "TR"
         
@@ -190,16 +189,15 @@ class GemSubtitleProcessor(QMainWindow):
         
         self.lang_dict = {
             "TR": {
-                "window_title": "nCheck - Altyazı Teknik Kalite Kontrol Paneli v0.5",
-                "panel_title": "🎬 nCheck - Altyazı Teknik Kalite Kontrol Paneli v0.5",
+                "window_title": "nCheck - Altyazı Teknik Kalite Kontrol Paneli v0.6",
+                "panel_title": "🎬 nCheck - Altyazı Teknik Kalite Kontrol Paneli v0.6",
                 "title_tr": "TÜRKÇE HEDEF (TR)",
-                "opt_optional": "Opsiyonel",
                 "opt_required": "Zorunlu",
                 "drag_hint": "SRT veya ASS Dosyasını Buraya Sürükle",
                 "status_success": "Başarılı!",
                 "err_srt_ass_only": "Lütfen sadece .srt veya .ass uzantılı alt yazı dosyası yükleyin.",
                 "tab_home": "Ana Sayfa",
-                "tab_technical": "Teknik Yeterlilik",
+                "tab_technical": "Teknik Rapor",
                 "tab_settings": "Standartlar",
                 "tab_history": "Geçmiş",
                 "tab_about": "Hakkında",
@@ -207,7 +205,6 @@ class GemSubtitleProcessor(QMainWindow):
                 "btn_load_tr_prompt": "Lütfen TR Dosyası Yükleyin...",
                 "group_thresholds": "🚧 Teknik İhlal Eşikleri",
                 "group_penalties": "⚖️ Teknik Ceza Çarpanları",
-                "lbl_cps": "Maksimum Okuma (CPS):",
                 "lbl_cpl": "Maksimum Karakter (CPL):",
                 "lbl_flash": "Minimum Flaş (Sn):",
                 "lbl_zombie": "Maksimum Zombi (Sn):",
@@ -220,7 +217,7 @@ class GemSubtitleProcessor(QMainWindow):
                 "lbl_p_ell": "Üç Nokta Çarpanı:",
                 "msg_success_body": "Alt yazılar analiz edildi. Sekmelerden sonuçları inceleyebilirsiniz.",
                 "about_body": "<b>nCheck - Altyazı Teknik Kalite Kontrol Paneli</b><br><br><b>Geliştirici:</b> nutuzar<br><b>Versiyon:</b> 0.5",
-                "rep_title": "⚙️ nCheck v0.5 Alt Yazı Teknik Analiz Raporu\n",
+                "rep_title": "⚙️ nCheck v0.6 Alt Yazı Teknik Analiz Raporu\n",
                 "rep_file": "**Hedef Dosya (TR):** ",
                 "rep_total_lines": "**Toplam Satır (Blok) Sayısı:** ",
                 "rep_violations": "📊 İhlal Oranları ve Kesintiler\n",
@@ -238,11 +235,9 @@ class GemSubtitleProcessor(QMainWindow):
                 "st_bad": "KÖTÜ (Zamanlama ve uzunluk kuralları tamamen ihlal edilmiş.)",
                 "btn_clear": "Yeni / Temizle",
                 "btn_open_folder": "Çıktı Klasörünü Aç",
-                "btn_save_pdf": "Bu Raporu PDF Olarak Kaydet",
-                "btn_delete_history": "Geçmişten Sil",
-                "lbl_vault": "Kilit",
-                "pl_vault_pwd": "Şifre Girin...",
-                "btn_unlock": "Kilidi Aç",
+                "btn_save_html": "Kaydet",
+                "btn_delete_history": "Seçili Olanı Sil",
+                "btn_clear_history": "Tümünü Sil",
                 "lbl_analysis_results": "Analiz Sonuçları",
                 "rep_cat0_title": "⛔ KATEGORİ 0 (Ölümcül Hata)\n",
                 "rep_cat0_r1": "Blok {0}: 3 veya daha fazla satır içeriyor.",
@@ -307,16 +302,15 @@ class GemSubtitleProcessor(QMainWindow):
 """
             },
             "EN": {
-                "window_title": "nCheck - Subtitle Technical Quality Control Panel v0.5",
-                "panel_title": "🎬 nCheck - Subtitle Technical Quality Control Panel v0.5",
+                "window_title": "nCheck - Subtitle Technical Quality Control Panel v0.6",
+                "panel_title": "🎬 nCheck - Subtitle Technical Quality Control Panel v0.6",
                 "title_tr": "TURKISH TARGET (TR)",
-                "opt_optional": "Optional",
                 "opt_required": "Required",
                 "drag_hint": "Drag & Drop SRT or ASS File Here",
                 "status_success": "Success!",
                 "err_srt_ass_only": "Please load only .srt or .ass files.",
                 "tab_home": "Home",
-                "tab_technical": "Technical Proficiency",
+                "tab_technical": "Technical Report",
                 "tab_settings": "Standards",
                 "tab_history": "History",
                 "tab_about": "About",
@@ -324,7 +318,6 @@ class GemSubtitleProcessor(QMainWindow):
                 "btn_load_tr_prompt": "Please Load TR File...",
                 "group_thresholds": "🚧 Tech Violation Thresholds",
                 "group_penalties": "⚖️ Tech Penalty Multipliers",
-                "lbl_cps": "Max Reading (CPS):",
                 "lbl_cpl": "Max Characters (CPL):",
                 "lbl_flash": "Min Flash (Sec):",
                 "lbl_zombie": "Max Zombie (Sec):",
@@ -337,7 +330,7 @@ class GemSubtitleProcessor(QMainWindow):
                 "lbl_p_ell": "Ellipsis Penalty:",
                 "msg_success_body": "Subtitles analyzed successfully.",
                 "about_body": "<b>nCheck - Subtitle Technical Quality Control Panel</b><br><br><b>Developer:</b> nutuzar<br><b>Version:</b> 0.5",
-                "rep_title": "⚙️ nCheck v0.5 Subtitle Technical Analysis Report\n",
+                "rep_title": "⚙️ nCheck v0.6 Subtitle Technical Analysis Report\n",
                 "rep_file": "**Target File (TR):** ",
                 "rep_total_lines": "**Total Lines:** ",
                 "rep_violations": "📊 Violation Rates and Deductions\n",
@@ -355,11 +348,9 @@ class GemSubtitleProcessor(QMainWindow):
                 "st_bad": "BAD",
                 "btn_clear": "New / Clear",
                 "btn_open_folder": "Open Output Folder",
-                "btn_save_pdf": "Save Report as PDF",
-                "btn_delete_history": "Delete from History",
-                "lbl_vault": "Vault",
-                "pl_vault_pwd": "Enter Password...",
-                "btn_unlock": "Unlock",
+                "btn_save_html": "Save",
+                "btn_delete_history": "Delete Selected",
+                "btn_clear_history": "Clear All",
                 "lbl_analysis_results": "Analysis Results",
                 "rep_cat0_title": "⛔ CATEGORY 0 (Fatal Error)\n",
                 "rep_cat0_r1": "Block {0}: Contains 3 or more lines.",
@@ -428,58 +419,38 @@ class GemSubtitleProcessor(QMainWindow):
         self.setup_ui()
         self.populate_history()
 
-    def closeEvent(self, event):
-        self.save_current_settings()
-        super().closeEvent(event)
-
-    def save_current_settings(self):
-        if hasattr(self, 'spin_cps'):
-            self.config["cps"] = self.spin_cps.value()
-            self.config["cpl"] = self.spin_cpl.value()
-            self.config["flash"] = self.spin_flash.value()
-            self.config["zombie"] = self.spin_zombie.value()
-            self.config["gap"] = self.spin_gap.value()
-            save_config(self.config)
-
-    def lock_settings(self, lock):
-        for w in [self.spin_cps, self.spin_cpl, self.spin_flash, self.spin_zombie, self.spin_gap]:
-            w.setReadOnly(lock)
-            w.setEnabled(not lock)
-
-    def unlock_settings(self):
-        if self.password_input.text() == "1969":
-            self.lock_settings(False)
-            QMessageBox.information(self, "Zindan", "Kilit Açıldı! Standartları değiştirebilirsiniz.")
-            self.password_input.clear()
-        else:
-            QMessageBox.warning(self, "Hata", "Yanlış Şifre!")
-
     def setup_ui(self):
-        self.resize(1625, 1235)
+        # Ekran boyutuna göre dinamik ölçeklendirme ve ortalama
+        screen = QApplication.desktop().availableGeometry()
+        w = min(1200, int(screen.width() * 0.85))
+        h = min(720, int(screen.height() * 0.85))
+        self.setMinimumSize(600, 400)
+        self.resize(w, h)
+        self.move(int((screen.width() - w) / 2), int((screen.height() - h) / 2) - 20)
         self.setStyleSheet("""
             QMainWindow { background-color: #0E0E11; color: #F0F0F5; font-family: 'Segoe UI Variable', 'Segoe UI', system-ui; }
             QWidget { background-color: #0E0E11; color: #F0F0F5; font-family: 'Segoe UI Variable', 'Segoe UI', system-ui; }
             QTabWidget::pane { border: 1px solid #23232A; background: #16161A; border-radius: 12px; margin-top: -1px; }
-            QTabBar::tab { background: #1C1C22; color: #7A7A8A; padding: 16px 14px; min-width: 180px; border-top-left-radius: 10px; border-top-right-radius: 10px; margin-right: 6px; font-weight: 700; font-size: 15px; }
+            QTabBar::tab { background: #1C1C22; color: #7A7A8A;  min-width: 120px; padding: 12px 10px; border-top-left-radius: 10px; border-top-right-radius: 10px; margin-right: 6px; font-weight: 700; font-size: 11pt; }
             QTabBar::tab:selected { background: #16161A; color: #FFFFFF; border-bottom: 3px solid #007AFF; }
             QTabBar::tab:hover:!selected { background: #23232A; color: #FFFFFF; }
-            QGroupBox { border: 1px solid #2A2A35; border-radius: 12px; margin-top: 28px; padding-top: 24px; color: #FFFFFF; font-size: 15px; background: #16161A; }
-            QGroupBox::title { subcontrol-origin: margin; left: 16px; padding: 0 10px; color: #007AFF; font-weight: bold; font-size: 16px; }
-            QPushButton { background-color: #007AFF; border: none; border-radius: 10px; color: #FFFFFF; padding: 14px; font-weight: bold; font-size: 16px; }
+            QGroupBox { border: 1px solid #2A2A35; border-radius: 9pt; margin-top: 15pt; padding-top: 10pt; color: #FFFFFF; font-size: 11pt; background: #16161A; }
+            QGroupBox::title { subcontrol-origin: margin; left: 12pt; padding: 0 7pt; color: #007AFF; font-weight: bold; font-size: 12pt; }
+            QPushButton { background-color: #007AFF; border: none; border-radius: 10px; color: #FFFFFF; padding: 14px; font-weight: bold; font-size: 12pt; }
             QPushButton:hover { background-color: #0056B3; }
             QPushButton:disabled { background-color: #23232A; color: #555565; }
-            QTextEdit, QTextBrowser { background-color: #111115; border: 1px solid #2A2A35; border-radius: 10px; padding: 18px; color: #E5E5E5; font-size: 15px; line-height: 1.6; }
-            QSpinBox, QDoubleSpinBox, QComboBox, QLineEdit { background-color: #1C1C22; border: 1px solid #333340; border-radius: 8px; color: #FFFFFF; padding: 10px; min-width: 70px; font-size: 15px; }
+            QTextEdit, QTextBrowser { background-color: #111115; border: 1px solid #2A2A35; border-radius: 10px; padding: 12px; color: #E5E5E5; font-size: 11pt; line-height: 1.6; }
+            QSpinBox, QDoubleSpinBox, QComboBox, QLineEdit { background-color: #1C1C22; border: 1px solid #333340; border-radius: 6pt; color: #FFFFFF; padding: 4pt 9pt; min-width: 52pt; min-height: 28px; min-width: 80px; font-size: 11pt; }
             QSpinBox:focus, QDoubleSpinBox:focus, QComboBox:focus, QLineEdit:focus { border: 1px solid #007AFF; background-color: #23232A; }
             QSpinBox:disabled, QDoubleSpinBox:disabled { background-color: #16161A; color: #666677; border: 1px solid #23232A; }
-            QLabel { color: #E5E5E5; font-size: 15px; }
+            QLabel { color: #E5E5E5; font-size: 11pt; }
             QScrollArea { border: none; background-color: transparent; }
-            QListWidget { background-color: #111115; border: 1px solid #2A2A35; border-radius: 10px; font-size: 15px; }
+            QListWidget { background-color: #111115; border: 1px solid #2A2A35; border-radius: 10px; font-size: 11pt; }
             QListWidget::item { padding: 12px; border-bottom: 1px solid #1C1C22; }
             QListWidget::item:selected { background-color: #1C1C22; color: #007AFF; font-weight: bold; border-left: 4px solid #007AFF; }
             QProgressBar { border: 1px solid #2A2A35; border-radius: 10px; background-color: #111115; color: #FFFFFF; font-weight: bold; text-align: center; height: 32px; }
             QProgressBar::chunk { background-color: #007AFF; border-radius: 10px; width: 20px; }
-            QRadioButton { color: #FFFFFF; font-weight: bold; font-size: 15px; padding: 5px; }
+            QRadioButton { color: #FFFFFF; font-weight: bold; font-size: 11pt; padding: 5px; }
             QRadioButton::indicator { width: 18px; height: 18px; border-radius: 9px; border: 2px solid #555565; background: #1E1E24; }
             QRadioButton::indicator:checked { background: #007AFF; border: 2px solid #007AFF; }
         """)
@@ -488,8 +459,8 @@ class GemSubtitleProcessor(QMainWindow):
         self.setCentralWidget(self.central_widget)
         
         self.main_layout = QVBoxLayout(self.central_widget)
-        self.main_layout.setContentsMargins(25, 25, 25, 25)
-        self.main_layout.setSpacing(20)
+        self.main_layout.setContentsMargins(15, 15, 15, 15)
+        self.main_layout.setSpacing(10)
 
         # --- HEADER ---
         self.header_layout = QHBoxLayout()
@@ -520,8 +491,8 @@ class GemSubtitleProcessor(QMainWindow):
         # Tab 1: Ana Sayfa
         self.home_tab = QWidget()
         self.home_layout = QVBoxLayout(self.home_tab)
-        self.home_layout.setContentsMargins(30, 30, 30, 30)
-        self.home_layout.setSpacing(25)
+        self.home_layout.setContentsMargins(20, 20, 20, 20)
+        self.home_layout.setSpacing(15)
 
         # SCORE BOARD
         self.score_board_layout = QHBoxLayout()
@@ -530,7 +501,7 @@ class GemSubtitleProcessor(QMainWindow):
         self.tech_score_lbl = QLabel("TEKNİK YETERLİLİK\n--")
         self.tech_score_lbl.setAlignment(Qt.AlignCenter)
         self.tech_score_lbl.setFont(QFont("Segoe UI Variable", 14, QFont.Bold))
-        self.tech_score_lbl.setStyleSheet("QLabel { background-color: #2D2D30; border-radius: 12px; padding: 20px; color: #FFFFFF; border: 2px solid #444444; }")
+        self.tech_score_lbl.setStyleSheet("QLabel { background-color: #2D2D30; border-radius: 12px; padding: 10px; color: #FFFFFF; border: 2px solid #444444; }")
         
 
         
@@ -556,20 +527,20 @@ class GemSubtitleProcessor(QMainWindow):
         
         self.process_button = QPushButton()
         self.process_button.setFont(QFont("Segoe UI Variable", 14, QFont.Bold))
-        self.process_button.setMinimumHeight(65)
+        self.process_button.setMinimumHeight(45)
         self.process_button.setStyleSheet("QPushButton { background-color: #FF9500; } QPushButton:hover { background-color: #FFA522; }")
         self.process_button.setEnabled(False)
         self.process_button.clicked.connect(self.start_technical_analysis)
         
         self.clear_btn = QPushButton("Yeni / Temizle")
         self.clear_btn.setFont(QFont("Segoe UI Variable", 12, QFont.Bold))
-        self.clear_btn.setMinimumHeight(65)
+        self.clear_btn.setMinimumHeight(45)
         self.clear_btn.setStyleSheet("QPushButton { background-color: #555565; color: #FFF; } QPushButton:hover { background-color: #444455; }")
         self.clear_btn.clicked.connect(self.clear_current_file)
         
         self.open_folder_btn = QPushButton("Çıktı Klasörünü Aç")
         self.open_folder_btn.setFont(QFont("Segoe UI Variable", 12, QFont.Bold))
-        self.open_folder_btn.setMinimumHeight(65)
+        self.open_folder_btn.setMinimumHeight(45)
         self.open_folder_btn.setStyleSheet("QPushButton { background-color: #30D158; color: #FFF; } QPushButton:hover { background-color: #28C14E; }")
         self.open_folder_btn.clicked.connect(self.open_output_folder)
         
@@ -590,16 +561,16 @@ class GemSubtitleProcessor(QMainWindow):
         self.tech_header_lbl = QLabel("Analiz Sonuçları")
         self.tech_header_lbl.setFont(QFont("Segoe UI Variable", 16, QFont.Bold))
         
-        self.save_pdf_btn = QPushButton("PDF Olarak Kaydet")
-        self.save_pdf_btn.setFont(QFont("Segoe UI Variable", 12, QFont.Bold))
-        self.save_pdf_btn.setMinimumHeight(45)
-        self.save_pdf_btn.setStyleSheet("QPushButton { background-color: #007AFF; color: #FFF; padding: 10px 20px; border-radius: 8px;} QPushButton:hover { background-color: #0056B3; } QPushButton:disabled { background-color: #333333; color: #777777; }")
-        self.save_pdf_btn.clicked.connect(self._on_save_pdf_clicked)
-        self.save_pdf_btn.setEnabled(False)
         
         self.tech_header_layout.addWidget(self.tech_header_lbl)
         self.tech_header_layout.addStretch()
-        self.tech_header_layout.addWidget(self.save_pdf_btn)
+        
+        self.save_html_btn = QPushButton("Kaydet")
+        self.save_html_btn.setFont(QFont("Segoe UI Variable", 12, QFont.Bold))
+        self.save_html_btn.setStyleSheet("QPushButton { background-color: #007AFF; color: #FFF; padding: 6px 15px; border-radius: 5px; } QPushButton:hover { background-color: #005BB5; }")
+        self.save_html_btn.clicked.connect(lambda: self.save_html_report(is_history=False))
+        self.save_html_btn.setEnabled(False)
+        self.tech_header_layout.addWidget(self.save_html_btn)
         
         self.tech_text = QTextEdit()
         self.tech_text.setReadOnly(True)
@@ -611,57 +582,7 @@ class GemSubtitleProcessor(QMainWindow):
         self.tabs.addTab(self.tech_tab, "")
 
         # Tab 4: Ayarlar
-        # Tab 4: Ayarlar (Standartlar)
-        self.settings_tab = QWidget()
-        self.settings_layout = QHBoxLayout(self.settings_tab)
         
-        self.manifesto_browser = QTextBrowser()
-        self.manifesto_browser.setOpenExternalLinks(True)
-        self.manifesto_browser.setHtml(self.get_text("manifesto"))
-        self.settings_layout.addWidget(self.manifesto_browser, stretch=7)
-        
-        self.controls_layout = QVBoxLayout()
-        self.controls_layout.setSpacing(15)
-        
-        self.threshold_group = QGroupBox(self.get_text("group_thresholds"))
-        self.threshold_group.setFont(QFont("Segoe UI Variable", 10, QFont.Bold))
-        self.form_threshold = QFormLayout(self.threshold_group)
-        self.form_threshold.setContentsMargins(15, 25, 15, 15)
-        
-        self.spin_cps = QDoubleSpinBox(); self.spin_cps.setRange(10.0, 40.0); self.spin_cps.setSingleStep(0.5); self.spin_cps.setValue(self.config.get("cps", 21.0))
-        self.spin_cpl = QSpinBox(); self.spin_cpl.setRange(20, 80); self.spin_cpl.setValue(self.config.get("cpl", 40))
-        self.spin_flash = QDoubleSpinBox(); self.spin_flash.setRange(0.1, 2.0); self.spin_flash.setSingleStep(0.1); self.spin_flash.setValue(self.config.get("flash", 0.7))
-        self.spin_zombie = QDoubleSpinBox(); self.spin_zombie.setRange(2.0, 15.0); self.spin_zombie.setSingleStep(0.5); self.spin_zombie.setValue(self.config.get("zombie", 7.0))
-        self.spin_gap = QSpinBox(); self.spin_gap.setRange(0, 500); self.spin_gap.setValue(self.config.get("gap", 24))
-        
-        self.lbl_cps_node = QLabel(self.get_text("lbl_cps")); self.form_threshold.addRow(self.lbl_cps_node, self.spin_cps)
-        self.lbl_cpl_node = QLabel(self.get_text("lbl_cpl")); self.form_threshold.addRow(self.lbl_cpl_node, self.spin_cpl)
-        self.lbl_flash_node = QLabel(self.get_text("lbl_flash")); self.form_threshold.addRow(self.lbl_flash_node, self.spin_flash)
-        self.lbl_zombie_node = QLabel(self.get_text("lbl_zombie")); self.form_threshold.addRow(self.lbl_zombie_node, self.spin_zombie)
-        self.lbl_gap_node = QLabel(self.get_text("lbl_gap")); self.form_threshold.addRow(self.lbl_gap_node, self.spin_gap)
-
-        self.vault_group = QGroupBox("Kilit")
-        self.vault_group.setFont(QFont("Segoe UI Variable", 10, QFont.Bold))
-        self.vault_layout = QVBoxLayout(self.vault_group)
-        
-        self.password_input = QLineEdit()
-        self.password_input.setPlaceholderText("Şifre Girin...")
-        self.password_input.setEchoMode(QLineEdit.Password)
-        self.unlock_btn = QPushButton("Kilidi Aç")
-        self.unlock_btn.clicked.connect(self.unlock_settings)
-        
-        self.vault_layout.addWidget(self.password_input)
-        self.vault_layout.addWidget(self.unlock_btn)
-        self.vault_layout.addStretch()
-
-        self.controls_layout.addWidget(self.threshold_group)
-        self.controls_layout.addWidget(self.vault_group)
-        self.controls_layout.addStretch()
-        
-        self.settings_layout.addLayout(self.controls_layout, stretch=3)
-        self.lock_settings(True)
-        self.tabs.addTab(self.settings_tab, "")
-
         # Tab 5: Geçmiş
         self.history_tab = QWidget()
         self.history_layout = QHBoxLayout(self.history_tab)
@@ -675,21 +596,28 @@ class GemSubtitleProcessor(QMainWindow):
         self.history_detail_text.setReadOnly(True)
         self.history_detail_text.setFont(QFont("Consolas", 11))
         
-        self.history_pdf_btn = QPushButton("Bu Raporu PDF Olarak Kaydet")
-        self.history_pdf_btn.setFont(QFont("Segoe UI Variable", 12, QFont.Bold))
-        self.history_pdf_btn.setStyleSheet("QPushButton { background-color: #FF453A; color: #FFF; padding: 15px; } QPushButton:hover { background-color: #D70015; }")
-        self.history_pdf_btn.clicked.connect(self.save_history_pdf)
-        self.history_pdf_btn.setEnabled(False)
         
-        self.history_delete_btn = QPushButton("Geçmişten Sil")
-        self.history_delete_btn.setFont(QFont("Segoe UI Variable", 12, QFont.Bold))
-        self.history_delete_btn.setStyleSheet("QPushButton { background-color: #333333; color: #FFF; padding: 15px; } QPushButton:hover { background-color: #555555; }")
+        self.history_delete_btn = QPushButton("Seçili Olanı Sil")
+        self.history_delete_btn.setFont(QFont("Segoe UI Variable", 11, QFont.Bold))
+        self.history_delete_btn.setStyleSheet("QPushButton { background-color: #333333; color: #FFF; padding: 12px; } QPushButton:hover { background-color: #555555; }")
         self.history_delete_btn.clicked.connect(self.delete_history_entry)
         self.history_delete_btn.setEnabled(False)
         
+        self.history_clear_all_btn = QPushButton("Tümünü Sil")
+        self.history_clear_all_btn.setFont(QFont("Segoe UI Variable", 11, QFont.Bold))
+        self.history_clear_all_btn.setStyleSheet("QPushButton { background-color: #FF3B30; color: #FFF; padding: 12px; } QPushButton:hover { background-color: #D70015; }")
+        self.history_clear_all_btn.clicked.connect(self.clear_all_history)
+        
         buttons_layout = QHBoxLayout()
-        buttons_layout.addWidget(self.history_pdf_btn)
+        self.history_save_btn = QPushButton("Kaydet")
+        self.history_save_btn.setFont(QFont("Segoe UI Variable", 11, QFont.Bold))
+        self.history_save_btn.setStyleSheet("QPushButton { background-color: #007AFF; color: #FFF; padding: 12px; border-radius: 5px; } QPushButton:hover { background-color: #005BB5; }")
+        self.history_save_btn.clicked.connect(lambda: self.save_html_report(is_history=True))
+        self.history_save_btn.setEnabled(False)
+        
+        buttons_layout.addWidget(self.history_save_btn)
         buttons_layout.addWidget(self.history_delete_btn)
+        buttons_layout.addWidget(self.history_clear_all_btn)
         
         self.history_detail_layout.addWidget(self.history_detail_text)
         self.history_detail_layout.addLayout(buttons_layout)
@@ -704,7 +632,7 @@ class GemSubtitleProcessor(QMainWindow):
         self.about_layout = QVBoxLayout(self.about_tab)
         self.about_text = QTextEdit()
         self.about_text.setReadOnly(True)
-        self.about_text.setStyleSheet("border: none; font-size: 22px; line-height: 1.8; margin: 40px; background: transparent;")
+        self.about_text.setStyleSheet("border: none; font-size: 16pt; line-height: 1.8; margin: 40px; background: transparent;")
         self.about_text.setAlignment(Qt.AlignCenter)
         self.about_layout.addWidget(self.about_text)
         self.tabs.addTab(self.about_tab, "")
@@ -718,7 +646,7 @@ class GemSubtitleProcessor(QMainWindow):
         self.tr_drop_box.update_style(False)
         self.tech_text.clear()
         self.set_score_labels(0)
-        self.save_pdf_btn.setEnabled(False)
+        
         self.update_ui_state()
 
     def populate_history(self):
@@ -733,37 +661,70 @@ class GemSubtitleProcessor(QMainWindow):
     def on_history_selected(self):
         selected = self.history_list.selectedItems()
         if not selected:
-            self.history_pdf_btn.setEnabled(False)
+            
             self.history_delete_btn.setEnabled(False)
+            if hasattr(self, 'history_save_btn'): self.history_save_btn.setEnabled(False)
             return
             
         idx = selected[0].data(Qt.UserRole)
         entry = self.history[idx]
         
-        t_s = entry.get('tech_score', 0)
-        display_text = f"Tarih: {entry.get('date', '')}\n"
-        display_text += f"Dosya: {entry.get('filename', '')}\n"
-        display_text += f"Teknik Skor: {t_s}\n"
-        display_text += "="*60 + "\n\n"
-        display_text += "--- TEKNİK YETERLİLİK ---\n" + entry.get('tech_report', '')
-        
-        self.history_detail_text.setPlainText(display_text)
-        self.history_pdf_btn.setEnabled(True)
+        html_report = entry.get('html_report', '')
+        if not html_report:
+            # Fallback for older history
+            t_s = entry.get('tech_score', 0)
+            display_text = f"Tarih: {entry.get('date', '')}\nDosya: {entry.get('filename', '')}\nTeknik Skor: {t_s}\n"
+            self.history_detail_text.setPlainText(display_text + entry.get('tech_report', ''))
+        else:
+            self.history_detail_text.setHtml(html_report)
+            
         self.history_delete_btn.setEnabled(True)
+        if hasattr(self, 'history_save_btn'): self.history_save_btn.setEnabled(True)
 
-    def save_history_pdf(self):
-        selected = self.history_list.selectedItems()
-        if not selected: return
-        idx = selected[0].data(Qt.UserRole)
-        entry = self.history[idx]
-        
-        self.save_pdf_report(
-            entry.get('tech_report', ''),
-            entry.get('tech_score', 0),
-            entry.get('is_red_card', False),
-            entry.get('stats', {}),
-            default_filename=f"nCheck_History_{entry.get('filename', 'report')}.pdf"
-        )
+
+    def save_html_report(self, is_history=False):
+        import os
+        try:
+            reports_dir = os.path.join(application_path, "Raporlar")
+            if not os.path.exists(reports_dir):
+                os.makedirs(reports_dir)
+                
+            if is_history:
+                selected = self.history_list.selectedItems()
+                if not selected: return
+                idx = selected[0].data(Qt.UserRole)
+                entry = self.history[idx]
+                filename_base = entry.get('filename', 'Rapor')
+                html_content = entry.get('html_report', '')
+            else:
+                if not hasattr(self, 'tr_drop_box') or not self.tr_drop_box.file_path: return
+                filename_base = os.path.basename(self.tr_drop_box.file_path)
+                html_content = getattr(self, 'current_html_report', '')
+                
+            if not html_content: return
+                
+            name_only = os.path.splitext(filename_base)[0]
+            out_name = f"{name_only}_nCheck.html"
+            out_path = os.path.join(reports_dir, out_name)
+            
+            with open(out_path, 'w', encoding='utf-8') as f:
+                f.write(html_content)
+                
+            title = "Başarılı" if self.current_lang == "TR" else "Success"
+            msg = f"Rapor kaydedildi:\n{out_path}" if self.current_lang == "TR" else f"Report saved:\n{out_path}"
+            QMessageBox.information(self, title, msg)
+        except Exception as e:
+            title = "Hata" if self.current_lang == "TR" else "Error"
+            QMessageBox.critical(self, title, f"{str(e)}")
+
+    def clear_all_history(self):
+        reply = QMessageBox.question(self, 'Tümünü Sil', 'Tüm geçmişi silmek istediğinize emin misiniz?', QMessageBox.Yes | QMessageBox.No, QMessageBox.No)
+        if reply == QMessageBox.Yes:
+            self.history = []
+            self.populate_history()
+            self.history_detail_text.clear()
+            self.history_delete_btn.setEnabled(False)
+            save_history(self.history)
 
     def delete_history_entry(self):
         selected = self.history_list.selectedItems()
@@ -776,18 +737,14 @@ class GemSubtitleProcessor(QMainWindow):
             save_history(self.history)
             self.populate_history()
             self.history_detail_text.clear()
-            self.history_pdf_btn.setEnabled(False)
+            
             self.history_delete_btn.setEnabled(False)
 
     def switch_language(self):
         if self.radio_en.isChecked():
             self.current_lang = "EN"
-            self.spin_cps.setValue(18.0)
-            self.spin_cpl.setValue(38)
         else:
-            self.current_lang = "TR"
-            self.spin_cps.setValue(21.0)
-            self.spin_cpl.setValue(40)
+            self.current_lang = "TR" 
         self.refresh_ui_texts()
         self.update_ui_state()
         
@@ -796,45 +753,6 @@ class GemSubtitleProcessor(QMainWindow):
             if hasattr(self, 'tr_drop_box') and self.tr_drop_box.file_path:
                 self.start_technical_analysis(show_msg=False)
 
-    def validate_subtitle_language(self, file_path):
-        try:
-            try:
-                with open(file_path, 'r', encoding='utf-8-sig') as f:
-                    lines = f.readlines()
-            except UnicodeDecodeError:
-                with open(file_path, 'r', encoding='windows-1254') as f:
-                    lines = f.readlines()
-        except Exception:
-            return True
-            
-        text_lines = []
-        for line in lines:
-            line = line.strip()
-            if not line or line.isdigit() or '-->' in line:
-                continue
-            if line.startswith('[') or line.startswith('Format:'):
-                continue
-            text_lines.append(line)
-            
-        if not text_lines:
-            return True
-            
-        start_idx = len(text_lines) // 4
-        end_idx = start_idx * 3
-        body_text = "".join(text_lines[start_idx:end_idx]).lower()
-        
-        tr_chars = ['ğ', 'ş', 'ı', 'ö', 'ç', 'ü']
-        tr_char_count = sum(body_text.count(c) for c in tr_chars)
-        
-        if self.current_lang == "EN" and tr_char_count >= 10:
-            QMessageBox.critical(self, "HATA / ERROR", "İngilizce (EN) modu seçili ancak yüklenen dosya Türkçe.\nLütfen hedef dili düzeltin.\n\nEnglish (EN) mode is selected but the file is in Turkish.\nPlease correct the target language.")
-            return False
-            
-        if self.current_lang == "TR" and tr_char_count == 0:
-            QMessageBox.critical(self, "HATA / ERROR", "Türkçe (TR) modu seçili ancak dosyada hiçbir Türkçe karakter bulunamadı.\nLütfen hedef dili düzeltin.\n\nTurkish (TR) mode is selected but the file has no Turkish characters.\nPlease correct the target language.")
-            return False
-            
-        return True
 
     def refresh_ui_texts(self):
         self.setWindowTitle(self.get_text("window_title"))
@@ -843,30 +761,16 @@ class GemSubtitleProcessor(QMainWindow):
         
         self.tabs.setTabText(0, self.get_text("tab_home"))
         self.tabs.setTabText(1, self.get_text("tab_technical"))
-        self.tabs.setTabText(2, self.get_text("tab_settings"))
-        self.tabs.setTabText(3, self.get_text("tab_history"))
-        self.tabs.setTabText(4, self.get_text("tab_about"))
-        
-        self.threshold_group.setTitle(self.get_text("group_thresholds"))
-        self.lbl_cps_node.setText(self.get_text("lbl_cps"))
-        self.lbl_cpl_node.setText(self.get_text("lbl_cpl"))
-        self.lbl_flash_node.setText(self.get_text("lbl_flash"))
-        self.lbl_zombie_node.setText(self.get_text("lbl_zombie"))
-        self.lbl_gap_node.setText(self.get_text("lbl_gap"))
-
+        self.tabs.setTabText(2, self.get_text("tab_history"))
+        self.tabs.setTabText(3, self.get_text("tab_about"))
         self.tech_header_lbl.setText(self.get_text("lbl_analysis_results"))
         self.clear_btn.setText(self.get_text("btn_clear"))
         self.open_folder_btn.setText(self.get_text("btn_open_folder"))
-        self.save_pdf_btn.setText(self.get_text("btn_save_pdf"))
-        self.history_pdf_btn.setText(self.get_text("btn_save_pdf"))
         self.history_delete_btn.setText(self.get_text("btn_delete_history"))
-        self.vault_group.setTitle(self.get_text("lbl_vault"))
-        self.password_input.setPlaceholderText(self.get_text("pl_vault_pwd"))
-        self.unlock_btn.setText(self.get_text("btn_unlock"))
-
-        self.about_text.setHtml(f"<div align='center'>{self.get_text('about_body')}</div>")
-        if hasattr(self, 'manifesto_browser'):
-            self.manifesto_browser.setHtml(self.get_text('manifesto'))
+        if hasattr(self, 'save_html_btn'): self.save_html_btn.setText(self.get_text("btn_save_html"))
+        if hasattr(self, 'history_save_btn'): self.history_save_btn.setText(self.get_text("btn_save_html"))
+        self.history_clear_all_btn.setText(self.get_text("btn_clear_history"))
+        self.about_text.setHtml(f"<div align='center'>{self.get_text('about_body')}</div><hr style='border: 1px solid #333; margin: 30px 0;'><div style='text-align: left; font-size: 14pt;'>{self.get_text('manifesto')}</div>")
 
     def get_text(self, key):
         if key in self.lang_dict[self.current_lang]:
@@ -986,87 +890,305 @@ class GemSubtitleProcessor(QMainWindow):
         else:
             return clean_text
 
+
+    def render_html_report(self, stats):
+        is_en = (self.current_lang == "EN")
+        txt_unknown = "Unknown File" if is_en else "Bilinmeyen Dosya"
+        
+        filename = stats.get('filename', txt_unknown)
+        total_lines = stats.get('total_lines', 0)
+        final_score = stats.get('final_score', 0)
+        t_star, tc, t_stat = get_rating_info(final_score, self.current_lang) if final_score > 0 else ("--", "#444444", "--")
+        
+        cat0_violations = stats.get('cat0_violations', 0)
+        cat0_reasons = stats.get('cat0_reasons', [])
+        cat0_indices = stats.get('cat0_indices', [])
+        
+        is_red_card = cat0_violations > 0
+        txt_yap_hata = "STRUCTURAL ERROR" if is_en else "YAPISAL HATA"
+        if is_red_card:
+            main_status = f"<span style='color: #FF3B30; font-weight: bold;'>{final_score:.1f} / 100 🔴 {txt_yap_hata}</span>"
+        else:
+            main_status = f"<span style='color: {tc}; font-weight: bold;'>{final_score:.1f} / 100 {t_star} {t_stat}</span>"
+
+        badges = []
+        for profile, data in stats.get('industry_badges', {}).items():
+            st = data['status']
+            rs = ', '.join(data['reasons'])
+            if st in ['GEÇERSİZ', 'INVALID']:
+                badges.append(f"<div style='margin-bottom: 8px;'><span style='background-color: rgba(255,59,48,0.2); color: #FF3B30; padding: 6px 12px; border-radius: 6px; border: 1px solid #FF3B30; font-weight: bold; display: inline-block;'>{profile}: 🔴 {st} ({rs})</span></div>")
+            elif st in ['UYUMLU', 'COMPLIANT']:
+                badges.append(f"<div style='margin-bottom: 8px;'><span style='background-color: rgba(255,204,0,0.2); color: #FFCC00; padding: 6px 12px; border-radius: 6px; border: 1px solid #FFCC00; font-weight: bold; display: inline-block;'>{profile}: 🟡 {st} ({rs})</span></div>")
+            else:
+                badges.append(f"<div style='margin-bottom: 8px;'><span style='background-color: rgba(52,199,89,0.2); color: #34C759; padding: 6px 12px; border-radius: 6px; border: 1px solid #34C759; font-weight: bold; display: inline-block;'>{profile}: 🟢 {st}</span></div>")
+
+        badges_html = "<div style='margin-top: 20px; margin-bottom: 25px; display: flex; flex-direction: column;'>" + "".join(badges) + "</div>"
+        
+        txt_blocks = "blocks" if is_en else "blok"
+        txt_indices = "Indices:" if is_en else "İndeksler:"
+        
+        def make_accordion(title, indices):
+            if not indices: return ""
+            idx_str = ", ".join(map(str, indices))
+            return f'''
+            <div style='margin-top: 12px; background: rgba(0,0,0,0.2); padding: 10px; border-radius: 5px; display: block;'>
+                <div style='font-weight: bold; color: #007AFF; margin-bottom: 5px;'>{title} ({len(indices)} {txt_blocks})</div>
+                <div style='word-wrap: break-word; font-family: Consolas; font-size: 10pt; color: #AAA; padding-top: 5px; border-top: 1px solid #333;'>
+                    {txt_indices} {idx_str}
+                </div>
+            </div>
+            '''
+
+        txt_cps_viol = "CPS Violations" if is_en else "CPS İhlalleri"
+        txt_dur_viol = "Duration Violations" if is_en else "Süre İhlalleri"
+        txt_cpl_viol = "CPL Violations" if is_en else "CPL İhlalleri"
+        txt_gap_viol = "Gap Violations" if is_en else "Gap İhlalleri"
+        txt_pyr_viol = "Pyramid Violations" if is_en else "Piramit İhlalleri"
+        txt_typ_viol = "Typographic Violations" if is_en else "Tipografi İhlalleri"
+
+        cat1_accordions = make_accordion(txt_cps_viol, stats.get('cps_indices', [])) + make_accordion(txt_dur_viol, stats.get('dur_indices', []))
+        cat2_accordions = make_accordion(txt_cpl_viol, stats.get('cpl_indices', [])) + make_accordion(txt_gap_viol, stats.get('gap_indices', [])) + make_accordion(txt_pyr_viol, stats.get('pyramid_indices', []))
+        cat3_accordions = make_accordion(txt_typ_viol, stats.get('typo_indices', []))
+
+        cat0_html = ""
+        txt_cat0_viol = "Cat 0 Erroneous Block Indices" if is_en else "Kat 0 Hatalı Blok İndeksleri"
+        txt_cat0_title = "CATEGORY 0: Structural Errors" if is_en else "KATEGORİ 0: Yapısal Hatalar"
+        txt_cat0_desc = "This file has been directly rejected due to the following fatal errors:" if is_en else "Bu dosya, aşağıdaki ölümcül hatalar nedeniyle doğrudan reddedilmiştir:"
+        
+        if is_red_card:
+            cat0_list = "<ul style='color: #FFF; padding-left: 20px;'>"
+            for r in cat0_reasons:
+                cat0_list += f"<li>{r}</li>"
+            cat0_list += "</ul>"
+            cat0_acc = make_accordion(txt_cat0_viol, cat0_indices)
+            
+            cat0_html = f'''
+            <div style='margin-top: 25px; background: rgba(255, 59, 48, 0.1); border: 2px solid #FF3B30; border-radius: 8px; padding: 20px;'>
+                <h2 style='color: #FF3B30; margin-top: 0;'>⛔ {txt_cat0_title}</h2>
+                <p style='color: #FFF; font-size: 15px;'>{txt_cat0_desc}</p>
+                {cat0_list}
+                {cat0_acc}
+            </div>
+            '''
+            
+        txt_rep_title = "nCheck v0.6 Subtitle Technical Analysis Report" if is_en else "nCheck v0.6 Alt Yazı Teknik Analiz Raporu"
+        txt_target_file = "Target File:" if is_en else "Hedef Dosya:"
+        txt_total_lines = "Total Lines (Blocks):" if is_en else "Toplam Satır (Blok) Sayısı:"
+        txt_final_score = "FINAL TECHNICAL SCORE (nCheck Standard):" if is_en else "NİHAİ TEKNİK SKOR (nCheck Standartı):"
+        
+        txt_cat1 = "CATEGORY 1: Readability" if is_en else "KATEGORİ 1: Okunabilirlik"
+        txt_cat2 = "CATEGORY 2: Visual Comfort" if is_en else "KATEGORİ 2: Görsel Konfor"
+        txt_cat3 = "CATEGORY 3: Hygiene" if is_en else "KATEGORİ 3: Hijyen"
+        txt_pts = "Points" if is_en else "Puan"
+        
+        txt_cps = "CPS Violation" if is_en else "CPS İhlali"
+        txt_dur = "Duration Violation" if is_en else "Süre İhlali"
+        txt_cpl = "CPL Violation" if is_en else "CPL İhlali"
+        txt_gap = "Gap Violation" if is_en else "Boşluk (Gap) İhlali"
+        txt_pyr = "Pyramid Violation" if is_en else "Piramit İhlali"
+        txt_typ = "Typographic Error" if is_en else "Tipografik Hata"
+
+        dashboard_html = f'''<div style='font-family: "Segoe UI Variable", sans-serif;'>
+    <h2 style='color: #E5E5E5; margin-bottom: 5px;'>⚙️ {txt_rep_title}</h2>
+    <p style='color: #AAA; font-size: 14px;'>
+        <b>{txt_target_file}</b> {filename}<br>
+        <b>{txt_total_lines}</b> {total_lines}<br>
+    </p>
+    <div style='font-size: 18px; margin-top: 15px;'>
+        <b>{txt_final_score}</b> {main_status}
+    </div>
+    
+    {badges_html}
+    
+    {cat0_html}
+    
+    <div style='display: flex; gap: 15px; margin-top: 25px;'>
+        <div style='flex: 1; background: #1C1C22; border: 1px solid #2A2A35; border-radius: 8px; padding: 15px;'>
+            <h3 style='color: #FF9500; margin-top: 0;'>🔴 {txt_cat1}</h3>
+            <p style='font-size: 24px; font-weight: bold; color: #FF9500; margin: 10px 0;'>{stats.get('cat1_score',0):.1f} <span style='font-size: 14px; color: #888;'>/ 50 {txt_pts}</span></p>
+            <ul style='color: #DDD; padding-left: 20px; font-size: 13px;'>
+                <li>{txt_cps}: {stats.get('R_cps',0):.1f}%</li>
+                <li>{txt_dur}: {stats.get('R_dur',0):.1f}%</li>
+            </ul>
+            {cat1_accordions}
+        </div>
+        
+        <div style='flex: 1; background: #1C1C22; border: 1px solid #2A2A35; border-radius: 8px; padding: 15px;'>
+            <h3 style='color: #FFCC00; margin-top: 0;'>🟡 {txt_cat2}</h3>
+            <p style='font-size: 24px; font-weight: bold; color: #FFCC00; margin: 10px 0;'>{stats.get('cat2_score',0):.1f} <span style='font-size: 14px; color: #888;'>/ 35 {txt_pts}</span></p>
+            <ul style='color: #DDD; padding-left: 20px; font-size: 13px;'>
+                <li>{txt_cpl}: {stats.get('R_cpl',0):.1f}%</li>
+                <li>{txt_gap}: {stats.get('R_gap',0):.1f}%</li>
+                <li>{txt_pyr}: {stats.get('pyramid',0)} {txt_blocks}</li>
+            </ul>
+            {cat2_accordions}
+        </div>
+        
+        <div style='flex: 1; background: #1C1C22; border: 1px solid #2A2A35; border-radius: 8px; padding: 15px;'>
+            <h3 style='color: #34C759; margin-top: 0;'>🟢 {txt_cat3}</h3>
+            <p style='font-size: 24px; font-weight: bold; color: #34C759; margin: 10px 0;'>{stats.get('cat3_score',0):.1f} <span style='font-size: 14px; color: #888;'>/ 15 {txt_pts}</span></p>
+            <ul style='color: #DDD; padding-left: 20px; font-size: 13px;'>
+                <li>{txt_typ}: {stats.get('typo',0)} {txt_blocks}</li>
+            </ul>
+            {cat3_accordions}
+        </div>
+    </div>
+</div>'''
+
+        return dashboard_html
+
     def analyze_technical(self, file_path):
         try:
             subs = self.load_subtitles(file_path)
         except Exception as e:
-            return f"Teknik analiz okuma hatası: {str(e)}", 0, False
+            return {"error": f"Teknik analiz okuma hatası: {str(e)}"}, 0, False
 
         total_lines = len(subs)
         if total_lines == 0:
-            return "Dosya boş, tamamen yoksayıldı veya geçersiz.", 0, False
+            return {"error": "Dosya boş, tamamen yoksayıldı veya geçersiz."}, 0, False
 
-        val_cps_limit = self.spin_cps.value()
-        val_cpl_limit = self.spin_cpl.value()
-        val_flash_min = self.spin_flash.value()
-        val_zombie_max = self.spin_zombie.value()
-        val_gap_ms = self.spin_gap.value()
+        # Profil bazlı nCheck kuralları (sabit referans)
+        ncheck_rules = INDUSTRY_PROFILES["nCheck"]
+        val_cps_limit = ncheck_rules["cps"]["value"]
+        val_cpl_limit = ncheck_rules["cpl"]["value"]
+        val_flash_min = ncheck_rules["min_dur_ms"]["value"] / 1000.0
+        val_gap_ms = ncheck_rules["min_gap_ms"]["value"]
+        val_max_lines = ncheck_rules["max_lines"]["value"]
+        val_zombie_max = 7.0 # Zombi varsayılan configte kalabilir
 
         cat0_violations = 0
         cat0_reasons = []
+        cat0_indices = []
+        
         cps_violations = 0
+        cps_indices = []
+        
         duration_violations = 0
+        dur_indices = []
+        
         cpl_violations = 0
+        cpl_indices = []
+        
         gap_violations = 0
+        gap_indices = []
+        
         pyramid_violations = 0
+        pyramid_indices = []
+        
         typo_blocks = 0
+        typo_indices = []
+
+        # Badge checks veri toplayıcı
+        badge_violations = {k: {"cps": 0, "cpl": 0, "min_dur_ms": 0, "min_gap_ms": 0, "max_lines": 0} for k in INDUSTRY_PROFILES.keys()}
 
         for i, sub in enumerate(subs):
             text = sub.text_without_tags.strip()
             raw_text = sub.text.strip()
             
             lines = text.split('\n')
+            idx = i + 1
+            
+            duration_ms = sub.end.ordinal - sub.start.ordinal
+            duration_sec = duration_ms / 1000.0
             
             # Kategori 0: İnfaz Kurulu
             is_cat0 = False
-            if len(lines) >= 3:
-                is_cat0 = True
-                cat0_reasons.append(self.get_text("rep_cat0_r1").format(i+1))
             
+            # Negatif süre kontrolü
+            if duration_ms < 0:
+                is_cat0 = True
+                cat0_reasons.append(f"Block {idx}: Negative Duration / Start > End." if self.current_lang == "EN" else f"Blok {idx}: Negatif Süre / Başlangıç bitişten büyük.")
+                
+            # Max lines kontrolü
+            if len(lines) > val_max_lines:
+                is_cat0 = True
+                cat0_reasons.append(f"Block {idx}: Contains 3 or more lines." if self.current_lang == "EN" else f"Blok {idx}: 3 veya daha fazla satır içeriyor.")
+            
+            # Overlapping kontrolü
             if i < total_lines - 1:
                 next_sub = subs[i+1]
                 if sub.end.ordinal > next_sub.start.ordinal:
                     is_cat0 = True
-                    cat0_reasons.append(self.get_text("rep_cat0_r2").format(i+1, i+2))
+                    cat0_reasons.append(f"Block {idx}-{idx+1}: Timecode overlapping." if self.current_lang == "EN" else f"Blok {idx}-{idx+1}: Zaman kodu çakışması (Overlapping).")
                     
             if is_cat0:
                 cat0_violations += 1
+                cat0_indices.append(idx)
 
-            # Kategori 1 & 2
-            is_cpl_violation = False
-            for line in lines:
-                if len(line) > val_cpl_limit:
-                    is_cpl_violation = True
-                    break
-            if is_cpl_violation:
+            # Badge değerlendirmeleri
+            cps = 0
+            if duration_sec > 0:
+                cps = len(text) / duration_sec
+                
+            has_gap = False
+            gap_ms = 0
+            if i < total_lines - 1:
+                next_sub = subs[i+1]
+                gap_ms = next_sub.start.ordinal - sub.end.ordinal
+                has_gap = True
+
+            max_line_len = max([len(l) for l in lines]) if lines else 0
+
+            for profile, rules in INDUSTRY_PROFILES.items():
+                if cps > rules["cps"]["value"]:
+                    badge_violations[profile]["cps"] += 1
+                if max_line_len > rules["cpl"]["value"]:
+                    badge_violations[profile]["cpl"] += 1
+                if duration_ms > 0 and duration_ms < rules["min_dur_ms"]["value"]:
+                    badge_violations[profile]["min_dur_ms"] += 1
+                if has_gap and gap_ms >= 0 and gap_ms < rules["min_gap_ms"]["value"]:
+                    badge_violations[profile]["min_gap_ms"] += 1
+                if len(lines) > rules["max_lines"]["value"]:
+                    badge_violations[profile]["max_lines"] += 1
+
+            # Kategori 1 & 2 (nCheck)
+            if max_line_len > val_cpl_limit:
                 cpl_violations += 1
+                cpl_indices.append(idx)
                 
             # Piramit Kuralı (Kat 2)
             if len(lines) == 2:
                 if abs(len(lines[0]) - len(lines[1])) > 12:
                     pyramid_violations += 1
+                    pyramid_indices.append(idx)
 
-            duration_sec = (sub.end.ordinal - sub.start.ordinal) / 1000.0
             if duration_sec > 0:
-                cps = len(text) / duration_sec
                 if cps > val_cps_limit:
                     cps_violations += 1
+                    cps_indices.append(idx)
                 if duration_sec < val_flash_min or duration_sec > val_zombie_max:
                     duration_violations += 1
+                    dur_indices.append(idx)
             else:
                 duration_violations += 1
+                dur_indices.append(idx)
 
-            if i < total_lines - 1:
-                next_sub = subs[i+1]
-                gap_ms = next_sub.start.ordinal - sub.end.ordinal
-                if gap_ms >= 0 and gap_ms < val_gap_ms:
-                    gap_violations += 1
+            if has_gap and gap_ms >= 0 and gap_ms < val_gap_ms:
+                gap_violations += 1
+                gap_indices.append(idx)
                     
             # Kategori 3: Tipografik Hijyen
             has_typo = False
-            if "  " in raw_text: has_typo = True
-            if re.search(r'\s+[,.?!]', raw_text): has_typo = True
             
+            # Çift boşluk
+            if "  " in raw_text: has_typo = True
+            
+            # Yeni kural: Noktalama sonrası bitişiklik (boşluk bırakılmaması)
+            # Örn: Nasıl?İyiyim. İstisnalar: sayılar arası (1.5), ardışık noktalar (...), veya HTML etiketleri öncesi (<)
+            if re.search(r'[,.?!][A-Za-zÇÖŞĞÜİçöşğüı]', text): 
+                has_typo = True
+                
+            # Yeni Kural: İkili diyalog senkronu
+            if len(lines) == 2:
+                h1 = lines[0].strip().startswith('-') or lines[0].strip().startswith('–')
+                h2 = lines[1].strip().startswith('-') or lines[1].strip().startswith('–')
+                if (h1 and not h2) or (h2 and not h1):
+                    has_typo = True
+            
+            # Yeni Kural: Süslü Etiket Artıkları (Orphaned ASS tags in SRT)
+            if re.search(r'\{\\a[n]?[1-9]\}', raw_text) or re.search(r'\{\\[a-zA-Z]+[^\}]+\}', raw_text):
+                has_typo = True
+
             i_open = raw_text.count('<i>')
             i_close = raw_text.count('</i>')
             b_open = raw_text.count('<b>')
@@ -1081,6 +1203,7 @@ class GemSubtitleProcessor(QMainWindow):
                 
             if has_typo:
                 typo_blocks += 1
+                typo_indices.append(idx)
 
         R_cps = (cps_violations / total_lines) * 100
         R_dur = (duration_violations / total_lines) * 100
@@ -1104,56 +1227,54 @@ class GemSubtitleProcessor(QMainWindow):
         
         final_score = cat1_score + cat2_score + cat3_score
         
-        if cat0_violations > 0:
-            status = self.get_text("rep_rejected")
-            final_score_str = f"{final_score:.1f} " + self.get_text("rep_disqualified")
-        else:
-            t_star, t_color, t_stat = get_rating_info(final_score, self.current_lang)
-            status = f"{t_star} {t_stat}"
-            final_score_str = f"{final_score:.1f} / 100"
-
-        report = ""
-        report += self.get_text('rep_title')
-        report += self.get_text('rep_file') + os.path.basename(file_path) + "\n"
-        report += self.get_text('rep_total_lines') + str(total_lines) + "\n"
-        
-        if not getattr(self, 'last_file_is_utf8', True):
-            report += self.get_text("rep_warn_utf8")
-        
-        report += "\n"
-        
-        if cat0_violations > 0:
-            report += self.get_text("rep_cat0_title")
-            for r in cat0_reasons[:5]:
-                report += f"  - {r}\n"
-            if len(cat0_reasons) > 5:
-                report += self.get_text("rep_cat0_r3").format(len(cat0_reasons) - 5)
-            report += self.get_text("rep_cat0_result")
+        industry_badges = {}
+        for profile, rules in INDUSTRY_PROFILES.items():
+            if profile == "nCheck": continue
             
-        report += self.get_text("rep_cat1_title")
-        if R_cps > 0: report += self.get_text("rep_cat1_cps").format(val_cps_limit, R_cps)
-        if R_dur > 0: report += self.get_text("rep_cat1_dur").format(val_flash_min, val_zombie_max, R_dur)
-        report += self.get_text("rep_cat1_score").format(cat1_score)
-        
-        report += self.get_text("rep_cat2_title")
-        if R_cpl > 0: report += self.get_text("rep_cat2_cpl").format(val_cpl_limit, R_cpl)
-        if R_gap > 0: report += self.get_text("rep_cat2_gap").format(val_gap_ms, R_gap)
-        if pyramid_violations > 0: report += self.get_text("rep_cat2_pyr").format(pyramid_violations, pyramid_violations * 0.5)
-        report += self.get_text("rep_cat2_score").format(cat2_score)
-        
-        report += self.get_text("rep_cat3_title")
-        if typo_blocks > 0: report += self.get_text("rep_cat3_typo").format(typo_blocks, cat3_deduction)
-        report += self.get_text("rep_cat3_score").format(cat3_score)
-        
-        report += self.get_text("rep_score") + final_score_str + "\n"
-        report += self.get_text("rep_status") + status
-        
+            reasons = []
+            has_error = False
+            has_warning = False
+            
+            prof_viol = badge_violations[profile]
+            is_en = (self.current_lang == "EN")
+            if prof_viol["cps"] > 0:
+                if rules["cps"]["is_error"]: has_error = True; reasons.append(f"CPS Exceeded ({prof_viol['cps']})" if is_en else f"CPS Aşımı ({prof_viol['cps']})")
+                else: has_warning = True; reasons.append(f"CPS Warning ({prof_viol['cps']})" if is_en else f"CPS Uyarısı ({prof_viol['cps']})")
+            
+            if prof_viol["cpl"] > 0:
+                if rules["cpl"]["is_error"]: has_error = True; reasons.append(f"CPL Exceeded ({prof_viol['cpl']})" if is_en else f"CPL Aşımı ({prof_viol['cpl']})")
+                else: has_warning = True; reasons.append(f"CPL Warning ({prof_viol['cpl']})" if is_en else f"CPL Uyarısı ({prof_viol['cpl']})")
+                
+            if prof_viol["min_dur_ms"] > 0:
+                if rules["min_dur_ms"]["is_error"]: has_error = True; reasons.append(f"Short Duration ({prof_viol['min_dur_ms']})" if is_en else f"Kısa Süre ({prof_viol['min_dur_ms']})")
+                else: has_warning = True; reasons.append(f"Short Dur Warning ({prof_viol['min_dur_ms']})" if is_en else f"Kısa Süre Uyarısı ({prof_viol['min_dur_ms']})")
+                
+            if prof_viol["min_gap_ms"] > 0:
+                if rules["min_gap_ms"]["is_error"]: has_error = True; reasons.append(f"Gap Violation ({prof_viol['min_gap_ms']})" if is_en else f"Boşluk İhlali ({prof_viol['min_gap_ms']})")
+                else: has_warning = True; reasons.append(f"Gap Warning ({prof_viol['min_gap_ms']})" if is_en else f"Boşluk Uyarısı ({prof_viol['min_gap_ms']})")
+                
+            if prof_viol["max_lines"] > 0:
+                if rules["max_lines"]["is_error"]: has_error = True; reasons.append(f"Line Violation ({prof_viol['max_lines']})" if is_en else f"Satır İhlali ({prof_viol['max_lines']})")
+                else: has_warning = True; reasons.append(f"Line Warning ({prof_viol['max_lines']})" if is_en else f"Satır Uyarısı ({prof_viol['max_lines']})")
+                
+            if has_error:
+                status = "INVALID" if is_en else "GEÇERSİZ"
+            elif has_warning:
+                status = "COMPLIANT" if is_en else "UYUMLU"
+            else:
+                status = "PASSED" if is_en else "GEÇERLİ"
+                
+            industry_badges[profile] = {
+                "status": status,
+                "reasons": reasons
+            }
+
         stats = {
+            'filename': os.path.basename(file_path),
             'cat1_score': cat1_score,
             'cat2_score': cat2_score,
             'cat3_score': cat3_score,
             'final_score': round(final_score, 1),
-            'status': status,
             'R_cps': R_cps,
             'R_dur': R_dur,
             'R_cpl': R_cpl,
@@ -1162,224 +1283,86 @@ class GemSubtitleProcessor(QMainWindow):
             'typo': typo_blocks,
             'cat0_violations': cat0_violations,
             'cat0_reasons': cat0_reasons,
-            'val_cps_limit': val_cps_limit,
-            'val_flash_min': val_flash_min,
-            'val_zombie_max': val_zombie_max,
-            'val_cpl_limit': val_cpl_limit,
-            'val_gap_ms': val_gap_ms,
-            'cat3_deduction': cat3_deduction,
-            'final_score_str': final_score_str,
-            'total_lines': total_lines
+            'cat0_indices': cat0_indices,
+            'cps_indices': cps_indices,
+            'dur_indices': dur_indices,
+            'cpl_indices': cpl_indices,
+            'gap_indices': gap_indices,
+            'pyramid_indices': pyramid_indices,
+            'typo_indices': typo_indices,
+            'total_lines': total_lines,
+            'industry_badges': industry_badges
         }
-        return report, round(final_score, 1), cat0_violations > 0, stats
+        
+        return stats, round(final_score, 1), cat0_violations > 0
 
     def set_score_labels(self, tech_score, is_red_card=False):
         if is_red_card:
             self.tech_score_lbl.setText(f"TEKNİK YETERLİLİK\n{tech_score} / 100\n🔴 REDDEDİLDİ")
-            self.tech_score_lbl.setStyleSheet(f"QLabel {{ background-color: #2D2D30; border-radius: 12px; padding: 20px; color: #FF3B30; border: 2px solid #FF3B30; font-size: 13pt; font-weight: bold; }}")
+            self.tech_score_lbl.setStyleSheet(f"QLabel {{ background-color: #2D2D30; border-radius: 12px; padding: 10px; color: #FF3B30; border: 2px solid #FF3B30; font-size: 13pt; font-weight: bold; }}")
             return
             
         t_star, tc, t_stat = get_rating_info(tech_score) if tech_score > 0 else ("--", "#444444", "--")
         tech_text = f"{tech_score} {t_star}" if tech_score > 0 else "--"
         
         self.tech_score_lbl.setText(f"TEKNİK YETERLİLİK\n{tech_text}")
-        self.tech_score_lbl.setStyleSheet(f"QLabel {{ background-color: #2D2D30; border-radius: 12px; padding: 20px; color: {tc}; border: 2px solid {tc}; font-size: 13pt; }}")
+        self.tech_score_lbl.setStyleSheet(f"QLabel {{ background-color: #2D2D30; border-radius: 12px; padding: 10px; color: {tc}; border: 2px solid {tc}; font-size: 13pt; }}")
 
     def start_technical_analysis(self, show_msg=True):
         self.current_tech_score = 0
         self.set_score_labels(0)
         self.tech_text.clear()
         
-        tech_report, tech_score, is_red_card, stats = self.analyze_technical(self.tr_drop_box.file_path)
+        stats, tech_score, is_red_card = self.analyze_technical(self.tr_drop_box.file_path)
+        if "error" in stats:
+            QMessageBox.warning(self, "Hata", stats["error"])
+            return
+            
         self.current_tech_score = tech_score
-        self.current_tech_report = tech_report
         self.current_tech_stats = stats
         self.current_is_red_card = is_red_card
         
-        ui_html = tech_report.replace('\n', '<br>')
-        ui_html = re.sub(r'\*\*(.*?)\*\*', r'<b>\1</b>', ui_html)
-        self.tech_text.setHtml(f"<div style='font-family: Consolas;'>{ui_html}</div>")
+        html_report = self.render_html_report(stats)
+        self.current_html_report = html_report
+        self.tech_text.setHtml(html_report)
+        if hasattr(self, 'save_html_btn'):
+            self.save_html_btn.setEnabled(True)
         
         self.set_score_labels(tech_score, is_red_card)
-        
-        self.save_pdf_btn.setEnabled(True)
         
         entry = {
             "date": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
             "filename": os.path.basename(self.tr_drop_box.file_path),
             "tech_score": tech_score,
             "is_red_card": is_red_card,
-            "tech_report": tech_report,
-            "stats": stats
+            "stats": stats,
+            "html_report": html_report
         }
         self.history.append(entry)
         save_history(self.history)
         self.populate_history()
         
         self.tabs.setCurrentIndex(1)
-        self.tabs.setCurrentIndex(1)
         if show_msg:
             QMessageBox.information(self, "nCheck", self.get_text("msg_success_body"))
 
-    def _on_save_pdf_clicked(self, checked=False):
-        tech_report = getattr(self, 'current_tech_report', '')
-        tech_score = getattr(self, 'current_tech_score', 0)
-        is_red_card = getattr(self, 'current_is_red_card', False)
-        stats = getattr(self, 'current_tech_stats', {})
-        self.save_pdf_report(tech_report, tech_score, is_red_card, stats)
-
-    def save_pdf_report(self, tech_content, tech_score, is_red_card, stats, default_filename=None):
-        if not tech_content:
-            return
-            
-        if not default_filename:
-            default_name = "nCheck_Auto_QC_Report.pdf"
-            if self.tr_drop_box.file_path is not None:
-                base_name = os.path.basename(self.tr_drop_box.file_path)
-                base_without_ext = os.path.splitext(base_name)[0]
-                default_name = f"nCheck_Auto_QC_{base_without_ext}.pdf"
-        else:
-            default_name = default_filename
-
-        options = QFileDialog.Options()
-        file_path, _ = QFileDialog.getSaveFileName(self, "PDF Kaydet", default_name, "PDF Files (*.pdf);;All Files (*)", options=options)
-        
-        if file_path:
-            try:
-                printer = QPrinter(QPrinter.HighResolution)
-                printer.setOutputFormat(QPrinter.PdfFormat)
-                printer.setOutputFileName(file_path)
-                
-                t_star, t_color, t_stat = get_rating_info(tech_score, self.current_lang) if tech_score > 0 else ("--", "#444444", "--")
-                
-                if is_red_card:
-                    stat_str = "REDDEDİLDİ" if self.current_lang == "TR" else "REJECTED"
-                    stamp_color = "#FF3B30"
-                    score_str = "--"
-                else:
-                    stat_str = t_stat.upper()
-                    stamp_color = t_color
-                    score_str = f"{tech_score:.1f}" if isinstance(tech_score, (int, float)) else str(tech_score)
-
-                current_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-                target_filename = os.path.basename(self.tr_drop_box.file_path) if hasattr(self, 'tr_drop_box') and self.tr_drop_box.file_path else "History_File"
-                if default_filename:
-                    target_filename = default_filename.replace("nCheck_History_", "").replace(".pdf", "")
-
-                log_lines = tech_content.split('\n')
-                filtered_log = []
-                for line in log_lines:
-                    if "KATEGORİ" in line or "CATEGORY" in line or "İhlal" in line or "Violation" in line or "Ceza" in line or "Penalty" in line or "Blok" in line or "Block" in line or "SONUÇ" in line or "RESULT" in line:
-                        filtered_log.append(line)
-                
-                html_log = "<br>".join(filtered_log)
-                html_log = re.sub(r'\*\*(.*?)\*\*', r'<b>\1</b>', html_log)
-
-                stats = stats or {}
-                c1_score = stats.get('cat1_score', 0)
-                c2_score = stats.get('cat2_score', 0)
-                c3_score = stats.get('cat3_score', 0)
-
-                cat1_name = "Okunabilirlik" if self.current_lang == "TR" else "Readability"
-                cat2_name = "Görsel Konfor" if self.current_lang == "TR" else "Visual Comfort"
-                cat3_name = "Hijyen" if self.current_lang == "TR" else "Hygiene"
-                
-                date_lbl = "Tarih" if self.current_lang == "TR" else "Date"
-                file_lbl = "Dosya" if self.current_lang == "TR" else "File"
-                viol_title = "Detaylı İhlal Logu" if self.current_lang == "TR" else "Detailed Violation Log"
-
-                html_template = f"""
-                <html>
-                <head>
-                <style>
-                    body {{ font-family: 'Segoe UI', Helvetica, sans-serif; font-size: 11pt; color: #333; }}
-                    .report-container {{ border: 2px solid {stamp_color}; padding: 20px; border-radius: 10px; }}
-                    h1, h2, h3 {{ margin: 0; padding: 0; }}
-                    .header-table {{ width: 100%; border-bottom: 2px solid #EEE; padding-bottom: 15px; margin-bottom: 20px; }}
-                    .dashboard-table {{ width: 100%; border-collapse: separate; border-spacing: 15px 0; margin-bottom: 30px; }}
-                    .dash-box {{ background-color: #F8F9FA; border: 1px solid #DDD; padding: 15px; text-align: center; border-radius: 8px; }}
-                    .box-title {{ font-size: 12pt; color: #666; font-weight: bold; margin-bottom: 10px; }}
-                    .box-score {{ font-size: 24pt; font-weight: bold; color: {stamp_color}; }}
-                    .log-section {{ background-color: #F9F9F9; padding: 15px; border-left: 5px solid {stamp_color}; font-family: 'Consolas', monospace; font-size: 10pt; line-height: 1.5; }}
-                </style>
-                </head>
-                <body>
-                
-                <div class="report-container">
-                    <table class="header-table">
-                        <tr>
-                            <td width="60%">
-                                <h1 style="color: #222;">nCheck Auto-QC Report</h1>
-                                <p><b>{date_lbl}:</b> {current_time}<br><b>{file_lbl}:</b> {target_filename}</p>
-                            </td>
-                            <td width="40%" style="text-align: right;">
-                                <h1 style="color: {stamp_color}; font-size: 32pt;">{score_str}</h1>
-                                <h2 style="color: {stamp_color}; letter-spacing: 2px;">{stat_str}</h2>
-                            </td>
-                        </tr>
-                    </table>
-                
-                    <table class="dashboard-table">
-                        <tr>
-                            <td width="33%" class="dash-box">
-                                <div class="box-title">CAT 1: {cat1_name}</div>
-                                <div class="box-score">{c1_score:.1f} / 50</div>
-                            </td>
-                            <td width="33%" class="dash-box">
-                                <div class="box-title">CAT 2: {cat2_name}</div>
-                                <div class="box-score">{c2_score:.1f} / 35</div>
-                            </td>
-                            <td width="33%" class="dash-box">
-                                <div class="box-title">CAT 3: {cat3_name}</div>
-                                <div class="box-score">{c3_score:.1f} / 15</div>
-                            </td>
-                        </tr>
-                    </table>
-                
-                    <h3 style="margin-bottom: 10px; color: #444;">{viol_title}</h3>
-                    <div class="log-section">
-                        {html_log}
-                    </div>
-                </div>
-                
-                </body>
-                </html>
-                """
-                doc = QTextDocument()
-                doc.setHtml(html_template)
-                doc.print_(printer)
-                
-                self.last_saved_pdf_dir = os.path.dirname(os.path.abspath(file_path))
-                msg_box = QMessageBox(self)
-                msg_box.setWindowTitle("nCheck")
-                msg_box.setText("PDF başarıyla kaydedildi:\n" + file_path)
-                msg_box.setIcon(QMessageBox.Information)
-                open_btn = msg_box.addButton("Aç", QMessageBox.ActionRole)
-                msg_box.addButton("Tamam", QMessageBox.AcceptRole)
-                msg_box.exec_()
-                
-                if msg_box.clickedButton() == open_btn:
-                    if sys.platform == 'win32':
-                        os.startfile(file_path)
-                    else:
-                        os.system(f'xdg-open "{file_path}"')
-            except Exception as e:
-                QMessageBox.critical(self, "nAudit", f"PDF oluşturma hatası: {str(e)}")
 
     def open_output_folder(self):
         try:
             folder_to_open = ""
-            if hasattr(self, 'last_saved_pdf_dir') and self.last_saved_pdf_dir and os.path.exists(self.last_saved_pdf_dir):
-                folder_to_open = self.last_saved_pdf_dir
-            elif self.tr_drop_box.file_path:
+            if self.tr_drop_box.file_path:
                 folder_to_open = os.path.dirname(self.tr_drop_box.file_path)
             else:
                 folder_to_open = os.path.expanduser("~")
                 
             if sys.platform == 'win32':
                 os.startfile(folder_to_open)
+            elif sys.platform == 'darwin':
+                import subprocess
+                subprocess.call(['open', folder_to_open])
             else:
-                os.system(f'xdg-open "{folder_to_open}"')
+                import subprocess
+                subprocess.call(['xdg-open', folder_to_open])
         except Exception as e:
             QMessageBox.warning(self, "nAudit", f"Klasör açılamadı: {str(e)}")
 

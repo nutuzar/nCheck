@@ -1,4 +1,4 @@
-# 🎬 nCheck v0.5 - Otonom Altyazı Teknik Kalite Kontrol Paneli
+# 🎬 nCheck v0.6 - Otonom Altyazı Teknik Kalite Kontrol Paneli
 
 > **MQM (Multidimensional Quality Metrics) standartlarını baz alan SRT ve ASS altyazı dosyaları için teknik denetim motoru.**
 
@@ -12,22 +12,20 @@
 ## 📌 Genel Bakış
 
 **Geliştirici:** nutuzar
-**Sürüm:** v0.5 (Kararlı)
+**Sürüm:** v0.6 (Kararlı)
 **Lisans:** GPL-3.0
 
 nCheck, SRT ve ASS formatındaki altyazı dosyalarının teknik yeterliliğini, uluslararası yayıncılık standartlarına (MQM) göre denetleyen bir kalite kontrol (QC) aracıdır. Çevirinin anlamsal veya dilbilgisi kalitesine müdahale etmez; odağı tamamen **okunabilirlik, görsel ergonomi ve teknik yerleşimdir.**
 
-Devasa altyazı arşivleri oluşturanlar, çevirmenler ve kalite güvence (QA) süreçlerini otomatize etmek isteyen kullanıcılar için tasarlanmıştır. Yüklenen her dosyayı analiz ederek hataları tespit eder, objektif bir kalite skoru (0-100) hesaplar ve yazdırmaya hazır bir PDF raporu üretir.
+Devasa altyazı arşivleri oluşturanlar, çevirmenler ve kalite güvence (QA) süreçlerini otomatize etmek isteyen kullanıcılar için tasarlanmıştır. Yüklenen her dosyayı analiz ederek hataları tespit eder, objektif bir kalite skoru (0-100) hesaplar ve yazdırmaya hazır bir HTML raporu üretir.
 
 ---
 
 ## 🚀 Temel Özellikler
 
-* **Otonom Teknik Analiz:** Dosyayı sürüklendiği an binlerce satırı milisaniyeler içinde tarar, kural ihlallerini tespit eder ve detaylı bir hata logu oluşturur.
-* **Katı Dil Profilleri:** Arka planda kilitli Türkçe (21 CPS / 40 CPL) ve İngilizce (18 CPS / 38 CPL) standartlarıyla çalışır. Yanlış dil profili seçilerek yüklenen dosyaları (örn: TR seçiliyken EN dosya yüklenmesi) analiz etmeyi reddeder ve kullanıcıyı uyarır.
-* **Auto-QC PDF Sertifikası:** Uygulama, her analiz sonucunda statik HTML tablolarıyla biçimlendirilmiş, kayma yapmayan ve sağ üst köşesinde dosyanın nihai durumunu gösteren mühür/kaşe bulunan bir PDF raporu üretir.
-* **Şifreli Standartlar Modu:** Eşik değerleri (CPS, CPL, boşluk süreleri vb.) dış müdahalelere ve yanlışlıkla değiştirilmeye karşı kilitlidir. Yalnızca yetkili parolaya sahip kullanıcılar standartları güncelleyebilir.
-* **Tipografik Uyarı Sistemi:** UTF-8 (BOM) standardında olmayan ANSI dosyaları programı çökertmez; sessizce okunur ancak üretilen raporun en tepesine uyarı notu düşülür.
+* **Otonom Çok Katmanlı Analiz:** Dosya sürüklendiği an binlerce satırı milisaniyeler içinde tarar. nCheck Türkçe standartları (19.5 CPS, 42 CPL, 84ms boşluk, 833ms minimum süre) üzerinden 100 üzerinden sanatkârane bir kalite puanı hesaplarken, eşzamanlı olarak Netflix, Amazon, EBU ve OpenSubtitles gibi küresel platformların katı yayın standartlarına göre de sektörel uyumluluk (Geçti/Kaldı) denetimi yapar.
+* **Dil-Körü Mimari ve JSON Esnekliği:** Başka bir dildeki (örn: Almanca) kaynak dosyalarınız için farklı teknik limitler kullanmak isterseniz, bu değerleri doğrudan sistemin kalbindeki JSON sözlüğüne (INDUSTRY_PROFILES) saniyeler içinde yeni bir profil olarak zahmetsizce ekleyebilirsiniz.
+
 
 ---
 
@@ -52,9 +50,10 @@ nCheck'in puanlama algoritması, küresel yayın endüstrisi standartlarına day
 *(Not: Dilbilgisi ve imla kontrolü nCheck'in değil, ekosistemin diğer parçası olan **nSpell** uygulamasının görevidir.)*
 
 ### ⛔ KATEGORİ 0: Kritik Hatalar (Puanlama Dışı / Doğrudan Ret)
-Bu kategorideki ihlaller altyazının temel yayın standartlarını bozar. Bir dosya 99 puan bile alsa, aşağıdaki hatalardan birini barındırıyorsa doğrudan **REDDEDİLDİ** durumuna düşer:
+Bu kategorideki ihlaller altyazının temel yayın standartlarını bozar ve oynatıcıların çökmesine neden olabilir. Bir dosya 99 puan bile alsa, aşağıdaki hatalardan birini barındırıyorsa doğrudan **REDDEDİLDİ** durumuna düşer:
 * **Zaman Kodu Çakışması (Overlapping):** Bir altyazı bloğu bitmeden diğerinin başlaması.
 * **Çoklu Satır İhlali:** Ekranda tek bir blokta 3 veya daha fazla satırın yer alması.
+* **Negatif Süre (Zamansal Paradoks):**  Bir bloğun bitiş zamanının, kendi başlangıç zamanından daha erken olması durumu.
 
 ### 🔴 KATEGORİ 1: Okunabilirlik ve Akış (Maksimum 50 Puan)
 İzleyicinin metni filmin temposundan kopmadan okuyabilme kapasitesini ölçer.
