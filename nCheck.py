@@ -1572,11 +1572,17 @@ class GemSubtitleProcessor(QMainWindow):
             return
 
         try:
-            # 1. nFixer çağır ve çalıştır
-            fixer = nFixer(file_path=current_file)
+            # 1. Mevcut dosyayı (SRT veya ASS) nCheck üzerinden pysrt objesi olarak oku
+            subs = self.load_subtitles(current_file)
+            if not subs or len(subs) == 0:
+                QMessageBox.warning(self, "Uyarı", "Onarılacak altyazı bloğu bulunamadı.")
+                return
+
+            # 2. nFixer'ı subs objesiyle başlat ve çalıştır
+            fixer = nFixer(subs=subs)
             clean_subs = fixer.run_all()
 
-            # 2. [OrijinalDosyaAdi]_Fixed.srt formatında kaydet
+            # 3. [OrijinalDosyaAdi]_Fixed.srt formatında kaydet
             base_name, _ = os.path.splitext(current_file)
             if base_name.endswith("_Fixed"):
                 fixed_file_path = f"{base_name}.srt"
@@ -1585,12 +1591,12 @@ class GemSubtitleProcessor(QMainWindow):
 
             clean_subs.save(fixed_file_path, encoding='utf-8')
 
-            # 3. Drop box dosya yolunu ve arayüz metnini güncelle
+            # 4. Drop box dosya yolunu ve arayüz metnini güncelle
             self.tr_drop_box.file_path = fixed_file_path
             self.tr_drop_box.refresh_text()
             self.tr_drop_box.update_style(False)
 
-            # 4. Otomatik olarak teknik analizi çağır (Öncesi/Sonrası şoku)
+            # 5. Otomatik olarak teknik analizi çağır (Öncesi/Sonrası şoku)
             self.start_technical_analysis(show_msg=True)
 
         except Exception as e:
