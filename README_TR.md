@@ -1,4 +1,4 @@
-# 🎬 nCheck v0.6 - Otonom Altyazı Teknik Kalite Kontrol Paneli
+# 🎬 nCheck v0.7 - Otonom Altyazı Teknik Kalite Kontrol Paneli
 
 > **MQM (Multidimensional Quality Metrics) standartlarını baz alan SRT ve ASS altyazı dosyaları için teknik denetim motoru.**
 
@@ -8,11 +8,12 @@
 
 ![nCheck Interface](assets/arayuz1.png)
 ![nCheck Interface](assets/arayuz2.png)
+![nCheck Interface](assets/arayuz3.png)
 
 ## 📌 Genel Bakış
 
 **Geliştirici:** nutuzar
-**Sürüm:** v0.6 (Kararlı)
+**Sürüm:** v0.7 (Kararlı)
 **Lisans:** GPL-3.0
 
 nCheck, SRT ve ASS formatındaki altyazı dosyalarının teknik yeterliliğini, uluslararası yayıncılık standartlarına (MQM) göre denetleyen bir kalite kontrol (QC) aracıdır. Çevirinin anlamsal veya dilbilgisi kalitesine müdahale etmez; odağı tamamen **okunabilirlik, görsel ergonomi ve teknik yerleşimdir.**
@@ -24,6 +25,7 @@ Devasa altyazı arşivleri oluşturanlar, çevirmenler ve kalite güvence (QA) s
 ## 🚀 Temel Özellikler
 
 * **Otonom Çok Katmanlı Analiz:** Dosya sürüklendiği an binlerce satırı milisaniyeler içinde tarar. nCheck Türkçe standartları (19.5 CPS, 42 CPL, 84ms boşluk, 833ms minimum süre) üzerinden 100 üzerinden sanatkârane bir kalite puanı hesaplarken, eşzamanlı olarak Netflix, Amazon, EBU ve OpenSubtitles gibi küresel platformların katı yayın standartlarına göre de sektörel uyumluluk (Geçti/Kaldı) denetimi yapar.
+* **Otonom Onarım Motoru: Sadece hataları raporlamakla kalmaz, entegre "Otomatik Onar" butonu sayesinde tespit edilen yapısal sorunları tek tıkla çözer. Deterministik bir matematikle çalışan bu üç fazlı motor; tipografik çöpleri temizler, uzun veya dengesiz piramit satırlarını geometrik olarak yeniden merkezler ve senkronu bozmadan 84ms'lik güvenli boşluklar ile akıllı CPS esnemelerini (mümkün olduğu ölçüde) uygular. Metnin edebi anlamına veya kelimelerine asla dokunmaz; yalnızca mekanik düzenlemeyi yaparak dosyanızı MQM standartlarına göre yaklaştırır.
 * **Dil-Körü Mimari ve JSON Esnekliği:** Başka bir dildeki (örn: Almanca) kaynak dosyalarınız için farklı teknik limitler kullanmak isterseniz, bu değerleri doğrudan sistemin kalbindeki JSON sözlüğüne (INDUSTRY_PROFILES) saniyeler içinde yeni bir profil olarak zahmetsizce ekleyebilirsiniz.
 
 

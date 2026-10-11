@@ -6,6 +6,7 @@ import json
 import time
 import random
 from datetime import datetime
+from nFixer import nFixer
 
 INDUSTRY_PROFILES = {
     "nCheck": {
@@ -46,7 +47,7 @@ INDUSTRY_PROFILES = {
 }
 
 
-from PyQt5.QtWidgets import (QApplication, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout,
+from PyQt5.QtWidgets import (QToolTip, QTextBrowser, QApplication, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout,
                              QLabel, QPushButton, QTextEdit, QTextBrowser, QMessageBox, QTabWidget,
                              QFormLayout, QDoubleSpinBox, QSpinBox, QGroupBox, QComboBox,
                              QFileDialog, QScrollArea, QLineEdit, QProgressBar, QRadioButton, QButtonGroup,
@@ -189,8 +190,8 @@ class GemSubtitleProcessor(QMainWindow):
         
         self.lang_dict = {
             "TR": {
-                "window_title": "nCheck - Altyazı Teknik Kalite Kontrol Paneli v0.6",
-                "panel_title": "🎬 nCheck - Altyazı Teknik Kalite Kontrol Paneli v0.6",
+                "window_title": "nCheck - Altyazı Teknik Kalite Kontrol Paneli v0.7",
+                "panel_title": "🎬 nCheck - Altyazı Teknik Kalite Kontrol Paneli v0.7",
                 "title_tr": "TÜRKÇE HEDEF (TR)",
                 "opt_required": "Zorunlu",
                 "drag_hint": "SRT veya ASS Dosyasını Buraya Sürükle",
@@ -202,6 +203,7 @@ class GemSubtitleProcessor(QMainWindow):
                 "tab_history": "Geçmiş",
                 "tab_about": "Hakkında",
                 "btn_process_only_tech": "Teknik Analiz Yap",
+                "btn_auto_fix": "🛠️ Otomatik Onar",
                 "btn_load_tr_prompt": "Lütfen TR Dosyası Yükleyin...",
                 "group_thresholds": "🚧 Teknik İhlal Eşikleri",
                 "group_penalties": "⚖️ Teknik Ceza Çarpanları",
@@ -216,8 +218,103 @@ class GemSubtitleProcessor(QMainWindow):
                 "lbl_p_gap": "Boşluk Çarpanı:",
                 "lbl_p_ell": "Üç Nokta Çarpanı:",
                 "msg_success_body": "Alt yazılar analiz edildi. Sekmelerden sonuçları inceleyebilirsiniz.",
-                "about_body": "<b>nCheck - Altyazı Teknik Kalite Kontrol Paneli</b><br><br><b>Geliştirici:</b> nutuzar<br><b>Versiyon:</b> 0.5",
-                "rep_title": "⚙️ nCheck v0.6 Alt Yazı Teknik Analiz Raporu\n",
+                "about_body": """<div style="font-family: 'Segoe UI Variable', 'Segoe UI', sans-serif; line-height: 1.6; color: #E5E5E5; padding: 10px 15px;">
+    <div align="center" style="margin-bottom: 25px;">
+        <h1 style="color: #0A84FF; font-size: 20pt; margin-bottom: 6px;">🎬 nCheck v0.7 - Otonom Altyazı Teknik Kalite Kontrol Paneli</h1>
+        <p style="font-size: 13pt; color: #FFFFFF; margin: 6px 0;"><b>Geliştirici:</b> nutuzar &nbsp;&nbsp;|&nbsp;&nbsp; <b>Sürüm:</b> v0.7 (Kararlı) &nbsp;&nbsp;|&nbsp;&nbsp; <b>Lisans:</b> GPL-3.0</p>
+        <p style="color: #8E8E93; font-size: 11pt; font-style: italic; margin-top: 6px;">
+            MQM (Multidimensional Quality Metrics) standartlarını baz alan SRT ve ASS altyazı dosyaları için teknik denetim motoru.
+        </p>
+    </div>
+    <hr style="border: none; border-top: 1px solid #333; margin: 20px 0;">
+    
+    <h2 style="color: #0A84FF; font-size: 14pt; margin-top: 20px;">📌 Genel Bakış</h2>
+    <p style="font-size: 11pt; margin-bottom: 10px;">
+        <b>Geliştirici:</b> nutuzar<br>
+        <b>Sürüm:</b> v0.7 (Kararlı)<br>
+        <b>Lisans:</b> GPL-3.0
+    </p>
+    <p style="font-size: 11pt; color: #CCC; margin-bottom: 10px;">
+        nCheck, SRT ve ASS formatındaki altyazı dosyalarının teknik yeterliliğini, uluslararası yayıncılık standartlarına (MQM) göre denetleyen bir kalite kontrol (QC) aracıdır. Çevirinin anlamsal veya dilbilgisi kalitesine müdahale etmez; odağı tamamen <b>okunabilirlik, görsel ergonomi ve teknik yerleşimdir.</b>
+    </p>
+    <p style="font-size: 11pt; color: #CCC;">
+        Devasa altyazı arşivleri oluşturanlar, çevirmenler ve kalite güvence (QA) süreçlerini otomatize etmek isteyen kullanıcılar için tasarlanmıştır. Yüklenen her dosyayı analiz ederek hataları tespit eder, objektif bir kalite skoru (0-100) hesaplar ve yazdırmaya hazır bir HTML raporu üretir.
+    </p>
+    <hr style="border: none; border-top: 1px solid #333; margin: 20px 0;">
+
+    <h2 style="color: #0A84FF; font-size: 14pt; margin-top: 20px;">🚀 Temel Özellikler</h2>
+    <ul style="font-size: 11pt; color: #CCC; line-height: 1.7;">
+        <li><b>Otonom Çok Katmanlı Analiz:</b> Dosya sürüklendiği an binlerce satırı milisaniyeler içinde tarar. nCheck Türkçe standartları (19.5 CPS, 42 CPL, 84ms boşluk, 833ms minimum süre) üzerinden 100 üzerinden sanatkârane bir kalite puanı hesaplarken, eşzamanlı olarak Netflix, Amazon, EBU ve OpenSubtitles gibi küresel platformların katı yayın standartlarına göre de sektörel uyumluluk (Geçti/Kaldı) denetimi yapar.</li>
+        <li><b>Otonom Onarım Motoru:</b> Sadece hataları raporlamakla kalmaz, entegre "Otomatik Onar" butonu sayesinde tespit edilen yapısal sorunları tek tıkla çözer. Deterministik bir matematikle çalışan bu üç fazlı motor; tipografik çöpleri temizler, uzun veya dengesiz piramit satırlarını geometrik olarak yeniden merkezler ve senkronu bozmadan 84ms'lik güvenli boşluklar ile akıllı CPS esnemelerini (mümkün olduğu ölçüde) uygular. Metnin edebi anlamına veya kelimelerine asla dokunmaz; yalnızca mekanik düzenlemeyi yaparak dosyanızı MQM standartlarına göre yaklaştırır.</li>
+        <li><b>Dil-Körü Mimari ve JSON Esnekliği:</b> Başka bir dildeki (örn: Almanca) kaynak dosyalarınız için farklı teknik limitler kullanmak isterseniz, bu değerleri doğrudan sistemin kalbindeki JSON sözlüğüne (INDUSTRY_PROFILES) saniyeler içinde yeni bir profil olarak zahmetsizce ekleyebilirsiniz.</li>
+    </ul>
+    <hr style="border: none; border-top: 1px solid #333; margin: 20px 0;">
+
+    <h2 style="color: #0A84FF; font-size: 14pt; margin-top: 20px;">📊 Derecelendirme Skalası</h2>
+    <p style="font-size: 11pt; color: #CCC;">
+        nCheck, dosyanın aldığı nihai puana göre (0-100) aşağıdaki sınıflandırmalardan birini atar:
+    </p>
+    <ul style="font-size: 11pt; list-style-type: none; line-height: 1.8;">
+        <li><b>0 - 59</b> &nbsp;: 🔴 <b>REDDEDİLDİ / YETERSİZ</b></li>
+        <li><b>60 - 64</b> : 🟡 <b>VASAT</b></li>
+        <li><b>65 - 69</b> : 🟡 <b>VASAT ÜSTÜ</b></li>
+        <li><b>70 - 79</b> : 🟢 <b>İZLENEBİLİR</b></li>
+        <li><b>80 - 89</b> : 🟢 <b>İYİ</b></li>
+        <li><b>90 - 94</b> : 🔵 <b>ÇOK İYİ</b></li>
+        <li><b>95 - 100</b>: 🔵 <b>ARŞİVLİK</b></li>
+    </ul>
+    <hr style="border: none; border-top: 1px solid #333; margin: 20px 0;">
+
+    <h2 style="color: #0A84FF; font-size: 14pt; margin-top: 20px;">📜 nCheck Kalite Değerlendirme Manifestosu (MQM)</h2>
+    <p style="font-size: 11pt; color: #CCC;">
+        nCheck'in puanlama algoritması, küresel yayın endüstrisi standartlarına dayanır. Toplam 100 puan, üç farklı ağırlık merkezine (%50, %35, %15) bölünmüştür. Ayrıca skordan bağımsız çalışan bir "İnfaz Kurulu" (Kategori 0) mevcuttur.
+    </p>
+    <p style="font-size: 10pt; color: #8E8E93; font-style: italic;">
+        *(Not: Dilbilgisi ve imla kontrolü nCheck'in değil, ekosistemin diğer parçası olan <b>nSpell</b> uygulamasının görevidir.)*
+    </p>
+
+    <h3 style="color: #FF3B30; font-size: 12pt; margin-top: 15px;">⛔ KATEGORİ 0: Kritik Hatalar (Puanlama Dışı / Doğrudan Ret)</h3>
+    <p style="font-size: 11pt; color: #CCC;">
+        Bu kategorideki ihlaller altyazının temel yayın standartlarını bozar ve oynatıcıların çökmesine neden olabilir. Bir dosya 99 puan bile alsa, aşağıdaki hatalardan birini barındırıyorsa doğrudan <b>REDDEDİLDİ</b> durumuna düşer:
+    </p>
+    <ul style="font-size: 11pt; color: #CCC; line-height: 1.6;">
+        <li><b>Zaman Kodu Çakışması (Overlapping):</b> Bir altyazı bloğu bitmeden diğerinin başlaması.</li>
+        <li><b>Çoklu Satır İhlali:</b> Ekranda tek bir blokta 3 veya daha fazla satırın yer alması.</li>
+        <li><b>Negatif Süre (Zamansal Paradoks):</b> Bir bloğun bitiş zamanının, kendi başlangıç zamanından daha erken olması durumu.</li>
+    </ul>
+
+    <h3 style="color: #FF9500; font-size: 12pt; margin-top: 15px;">🔴 KATEGORİ 1: Okunabilirlik ve Akış (Maksimum 50 Puan)</h3>
+    <p style="font-size: 11pt; color: #CCC;">
+        İzleyicinin metni filmin temposundan kopmadan okuyabilme kapasitesini ölçer.
+    </p>
+    <ul style="font-size: 11pt; color: #CCC; line-height: 1.6;">
+        <li><b>CPS İhlali:</b> Saniyede okunan karakter (Karakter/Saniye) limitinin aşılması.</li>
+        <li><b>Flaş Altyazılar:</b> Ekranda insan gözünün algılayamayacağı kadar kısa (örn: 0.7sn altı) kalan metinler.</li>
+        <li><b>Zombi Altyazılar:</b> Ekranda gereksiz yere uzun (örn: 7sn üstü) kalan metinler.</li>
+    </ul>
+
+    <h3 style="color: #FFCC00; font-size: 12pt; margin-top: 15px;">🟡 KATEGORİ 2: Görsel Konfor ve Yerleşim (Maksimum 35 Puan)</h3>
+    <p style="font-size: 11pt; color: #CCC;">
+        Metnin ekranda kapladığı alan ve gözü yorma potansiyeli bu kategoride değerlendirilir.
+    </p>
+    <ul style="font-size: 11pt; color: #CCC; line-height: 1.6;">
+        <li><b>CPL İhlali:</b> Satır başına düşen karakter (Karakter/Satır) limitinin aşılması.</li>
+        <li><b>Frame Gap (Boşluk) İhlali:</b> İki altyazı arasında yeterli boşluğun (örn: 24ms) bırakılmaması sonucu oluşan titreme (flicker) etkisi.</li>
+        <li><b>Piramit (Satır Dengesi) İhlali:</b> İki satırlık bloklarda üst ve alt satırın karakter sayıları arasında uçurum olması (dikey dengesizlik).</li>
+    </ul>
+
+    <h3 style="color: #34C759; font-size: 12pt; margin-top: 15px;">🟢 KATEGORİ 3: Tipografik Hijyen (Maksimum 15 Puan)</h3>
+    <p style="font-size: 11pt; color: #CCC;">
+        Dosyanın tipografik işçiliğini denetler. Oran hesabı yerine ihlal başına maktu ceza kesilir.
+    </p>
+    <ul style="font-size: 11pt; color: #CCC; line-height: 1.6;">
+        <li>Kelimeler arası gereksiz çift boşluklar.</li>
+        <li>Noktalama işaretlerinden önce bırakılan kuraldışı boşluklar.</li>
+        <li>Kapatılmamış veya hatalı yazılmış HTML biçimlendirme etiketleri (<code>&lt;i&gt;</code>, <code>&lt;b&gt;</code> vb.).</li>
+        <li>Üç nokta (...) istismarı veya kuraldışı sembol kullanımları.</li>
+    </ul>
+</div>""",
+                "rep_title": "⚙️ nCheck v0.7 Alt Yazı Teknik Analiz Raporu\n",
                 "rep_file": "**Hedef Dosya (TR):** ",
                 "rep_total_lines": "**Toplam Satır (Blok) Sayısı:** ",
                 "rep_violations": "📊 İhlal Oranları ve Kesintiler\n",
@@ -259,51 +356,11 @@ class GemSubtitleProcessor(QMainWindow):
                 "rep_cat3_title": "🟢 KATEGORİ 3: TİPOGRAFİK HİJYEN (Maks 15 Puan)\n",
                 "rep_cat3_typo": "  * Tipografik Hataya Sahip Blok: {0} adet (Ceza: -{1:.1f})\n",
                 "rep_cat3_score": "  -> Kategori 3 Skoru: {0:.1f} / 15\n\n",
-                "manifesto": """
-<h2 style='color: #007AFF;'>nCheck Kalite Değerlendirme Manifestosu (MQM Tabanlı)</h2>
-<p>nCheck, altyazı dosyalarını (SRT/ASS) değerlendirirken rastgele puan kırma veya "keyfi katsayılar" kullanma mantığını tamamen reddeder. Puanlama algoritmasının temeli, küresel yayıncılık endüstrisinin (Netflix, Disney, EBU) kullandığı MQM (Multidimensional Quality Metrics) standartlarına dayanır.</p>
-<p>Bir dosyanın alacağı 100 üzerinden nihai skor, izleyicinin bilişsel kapasitesi, ekranın görsel ergonomisi ve metnin tipografik işçiliği baz alınarak üç ana ağırlık merkezine (%50, %35, %15) bölünmüştür. Ayrıca skordan bağımsız işleyen bir "Sıfır Tolerans" mekanizması mevcuttur.</p>
-<p>Emeğinizin neye göre, nasıl değerlendirildiğini anlamak için aşağıdaki matrisi inceleyebilirsiniz:</p>
-<br>
-<h3 style='color: #FF3B30;'>⛔ KATEGORİ 0: İnfaz Kurulu (MQM: Critical / Ölümcül Hata)</h3>
-<p><b>Ağırlık: Puanlama Dışı (Doğrudan Ret)</b></p>
-<p>Bu kategorideki ihlaller, altyazının okunabilirliğini değil, doğrudan oynatılabilirliğini ve temel yayın standartlarını hedefler. Bir dosyanın puanı 99 bile olsa, aşağıdaki hatalardan birini barındırıyorsa sistem tarafından kırmızı kart görür ve "REDDEDİLDİ" durumuna düşer.</p>
-<ul>
-<li><b>Zaman Kodu Çakışması (Overlapping):</b> Bir altyazı bitmeden diğerinin başlaması.</li>
-<li><b>Çoklu Satır İhlali:</b> Ekranda tek bir blokta 3 veya daha fazla satırın yer alması.</li>
-</ul>
-<br>
-<h3 style='color: #FF9500;'>🔴 KATEGORİ 1: Okunabilirlik ve Akış (MQM: Major / Büyük Hata)</h3>
-<p><b>Ağırlık: Toplam Skorun %50'si (Maksimum 50 Puan)</b></p>
-<p>Bir altyazının varoluş amacı izleyici tarafından, filmin temposundan kopmadan okunabilmesidir. İzleyicinin gözü metne yetişemiyorsa, geri kalan hiçbir unsurun önemi yoktur.</p>
-<ul>
-<li><b>CPS (Okuma Hızı) Aşımı:</b> Saniyede okunan karakter sayısının (seçili dil profiline göre) maksimum sınırı aşması. İhlaller, oranlarına göre bu 50 puanlık dilimden ağır kesintiler yapar.</li>
-<li><b>Flaş ve Zombi Altyazılar:</b> Ekranda insan gözünün algılayamayacağı kadar kısa (örn: 0,7 sn altı) veya gereksiz yere uzun (örn: 7 sn üstü) kalan metinler.</li>
-</ul>
-<br>
-<h3 style='color: #FFCC00;'>🟡 KATEGORİ 2: Görsel Konfor ve Yerleşim (MQM: Major-Minor / Orta Düzey Hata)</h3>
-<p><b>Ağırlık: Toplam Skorun %35'i (Maksimum 35 Puan)</b></p>
-<p>Metin rahat okunabilir hızda olsa bile, ekranda kapladığı alan ve gözü yorma potansiyeli bu kategoride değerlendirilir.</p>
-<ul>
-<li><b>CPL (Satır Genişliği) Aşımı:</b> Satır başına düşen karakter sayısının sınırları aşması. Uzun satırlar izleyicinin gözünü ekranın bir ucundan diğer ucuna savurur.</li>
-<li><b>Boşluk İhlali (Frame Gap):</b> Arka arkaya gelen iki altyazı arasında yeterli milisaniye boşluğunun bırakılmaması, ekranda titreme (flicker) hissi yaratır.</li>
-<li><b>Satır Dengesi (Piramit Kuralı):</b> İki satırlık bloklarda üst ve alt satırın karakter sayıları arasında uçurum olması. Gözün metni okurken dikeyde dengesiz bir sıçrama yapmasına neden olur.</li>
-</ul>
-<br>
-<h3 style='color: #34C759;'>🟢 KATEGORİ 3: Tipografik Hijyen ve İşçilik (MQM: Minor / Küçük Hata)</h3>
-<p><b>Ağırlık: Toplam Skorun %15'i (Maksimum 15 Puan)</b></p>
-<p>Zamanlaması ve akışı kusursuz bir metnin, çevirmenin zanaatkar tarafını gösterdiği detaylarıdır. Çeviri "Vasat" durumuna düşmez ancak "Arşivlik" seviyesine çıkmasını engelleyen pürüzler burada cezalandırılır. Bu kategori, oran hesabı yerine maktu (sabit) cezalarla çalışır.</p>
-<ul>
-<li><b>Çift Boşluklar (Double Spaces):</b> Kelimeler arası bırakılan hantal ve gereksiz boşluklar.</li>
-<li><b>Noktalama Hataları:</b> Virgül veya noktadan önce bırakılan boşluklar.</li>
-<li><b>Bozuk Etiketler:</b> Açılıp (örn: &lt;i&gt;) kapanmayan veya hatalı uygulanan HTML etiketleri.</li>
-<li><b>İşaret İstismarı:</b> Üç nokta yerine üç adet tekil nokta kullanılması gibi kuraldışı sembol kullanımları.</li>
-</ul>
-"""
+                "manifesto": ""
             },
             "EN": {
-                "window_title": "nCheck - Subtitle Technical Quality Control Panel v0.6",
-                "panel_title": "🎬 nCheck - Subtitle Technical Quality Control Panel v0.6",
+                "window_title": "nCheck - Subtitle Technical Quality Control Panel v0.7",
+                "panel_title": "🎬 nCheck - Subtitle Technical Quality Control Panel v0.7",
                 "title_tr": "TURKISH TARGET (TR)",
                 "opt_required": "Required",
                 "drag_hint": "Drag & Drop SRT or ASS File Here",
@@ -315,6 +372,7 @@ class GemSubtitleProcessor(QMainWindow):
                 "tab_history": "History",
                 "tab_about": "About",
                 "btn_process_only_tech": "Perform Only Technical Analysis",
+                "btn_auto_fix": "🛠️ Auto Fix",
                 "btn_load_tr_prompt": "Please Load TR File...",
                 "group_thresholds": "🚧 Tech Violation Thresholds",
                 "group_penalties": "⚖️ Tech Penalty Multipliers",
@@ -329,8 +387,103 @@ class GemSubtitleProcessor(QMainWindow):
                 "lbl_p_gap": "Gap Penalty:",
                 "lbl_p_ell": "Ellipsis Penalty:",
                 "msg_success_body": "Subtitles analyzed successfully.",
-                "about_body": "<b>nCheck - Subtitle Technical Quality Control Panel</b><br><br><b>Developer:</b> nutuzar<br><b>Version:</b> 0.5",
-                "rep_title": "⚙️ nCheck v0.6 Subtitle Technical Analysis Report\n",
+                "about_body": """<div style="font-family: 'Segoe UI Variable', 'Segoe UI', sans-serif; line-height: 1.6; color: #E5E5E5; padding: 10px 15px;">
+    <div align="center" style="margin-bottom: 25px;">
+        <h1 style="color: #0A84FF; font-size: 20pt; margin-bottom: 6px;">🎬 nCheck v0.7 - Autonomous Subtitle Technical Quality Control Panel</h1>
+        <p style="font-size: 13pt; color: #FFFFFF; margin: 6px 0;"><b>Geliştirici:</b> nutuzar &nbsp;&nbsp;|&nbsp;&nbsp; <b>Version:</b> v0.7 (Stable) &nbsp;&nbsp;|&nbsp;&nbsp; <b>License:</b> GPL-3.0</p>
+        <p style="color: #8E8E93; font-size: 11pt; font-style: italic; margin-top: 6px;">
+            Technical inspection engine for SRT and ASS subtitle files based on MQM (Multidimensional Quality Metrics) standards.
+        </p>
+    </div>
+    <hr style="border: none; border-top: 1px solid #333; margin: 20px 0;">
+    
+    <h2 style="color: #0A84FF; font-size: 14pt; margin-top: 20px;">📌 Overview</h2>
+    <p style="font-size: 11pt; margin-bottom: 10px;">
+        <b>Geliştirici:</b> nutuzar<br>
+        <b>Version:</b> v0.7 (Stable)<br>
+        <b>License:</b> GPL-3.0
+    </p>
+    <p style="font-size: 11pt; color: #CCC; margin-bottom: 10px;">
+        nCheck is a quality control (QC) tool that audits the technical compliance of subtitle files in SRT and ASS formats according to international broadcasting standards (MQM). It does not interfere with the semantic or grammatical quality of the translation; its focus is entirely on <b>readability, visual ergonomics, and spatial placement.</b>
+    </p>
+    <p style="font-size: 11pt; color: #CCC;">
+        Designed for subtitle archivists, translators, and users seeking to automate quality assurance (QA) pipelines. It analyzes each uploaded file to detect errors, calculates an objective quality score (0-100), and generates a print-ready HTML report.
+    </p>
+    <hr style="border: none; border-top: 1px solid #333; margin: 20px 0;">
+
+    <h2 style="color: #0A84FF; font-size: 14pt; margin-top: 20px;">🚀 Key Features</h2>
+    <ul style="font-size: 11pt; color: #CCC; line-height: 1.7;">
+        <li><b>Autonomous Multi-Layered Analysis:</b> Scans thousands of lines within milliseconds upon drag & drop. While calculating an artisanal quality score out of 100 based on nCheck Turkish standards (19.5 CPS, 42 CPL, 84ms gap, 833ms minimum duration), it simultaneously performs industry compliance (Pass/Fail) audits against strict global broadcasting standards like Netflix, Amazon, EBU, and OpenSubtitles.</li>
+        <li><b>Autonomous Repair Engine:</b> Not only reports errors, but also resolves structural issues with a single click thanks to the integrated "Auto Fix" button. Operating on deterministic mathematics, this three-phase engine cleans typographic debris, geometrically re-centers long or unbalanced pyramid lines, and applies safe 84ms gaps alongside intelligent CPS stretching (where possible) without disrupting sync. It never touches the literary meaning or wording of the text; it solely applies mechanical formatting to align your file with MQM standards.</li>
+        <li><b>Language-Agnostic Architecture & JSON Flexibility:</b> If you wish to use different technical thresholds for source files in another language (e.g., German), you can effortlessly add these values as a new profile in seconds directly to the JSON dictionary (INDUSTRY_PROFILES) at the core of the system.</li>
+    </ul>
+    <hr style="border: none; border-top: 1px solid #333; margin: 20px 0;">
+
+    <h2 style="color: #0A84FF; font-size: 14pt; margin-top: 20px;">📊 Rating Scale</h2>
+    <p style="font-size: 11pt; color: #CCC;">
+        nCheck assigns one of the following tiers based on the file's final score (0-100):
+    </p>
+    <ul style="font-size: 11pt; list-style-type: none; line-height: 1.8;">
+        <li><b>0 - 59</b> &nbsp;: 🔴 <b>REJECTED / INSUFFICIENT</b></li>
+        <li><b>60 - 64</b> : 🟡 <b>MEDIOCRE</b></li>
+        <li><b>65 - 69</b> : 🟡 <b>ABOVE MEDIOCRE</b></li>
+        <li><b>70 - 79</b> : 🟢 <b>WATCHABLE</b></li>
+        <li><b>80 - 89</b> : 🟢 <b>GOOD</b></li>
+        <li><b>90 - 94</b> : 🔵 <b>VERY GOOD</b></li>
+        <li><b>95 - 100</b>: 🔵 <b>ARCHIVAL</b></li>
+    </ul>
+    <hr style="border: none; border-top: 1px solid #333; margin: 20px 0;">
+
+    <h2 style="color: #0A84FF; font-size: 14pt; margin-top: 20px;">📜 nCheck Quality Evaluation Manifesto (MQM)</h2>
+    <p style="font-size: 11pt; color: #CCC;">
+        nCheck's scoring algorithm is built on global broadcasting industry standards. The total 100 points are distributed across three distinct centers of gravity (50%, 35%, 15%). Additionally, an independent "Execution Board" (Category 0) enforces zero tolerance.
+    </p>
+    <p style="font-size: 10pt; color: #8E8E93; font-style: italic;">
+        *(Note: Grammar and spelling checks are handled by <b>nSpell</b>, another component of the ecosystem, rather than nCheck.)*
+    </p>
+
+    <h3 style="color: #FF3B30; font-size: 12pt; margin-top: 15px;">⛔ CATEGORY 0: Critical Errors (Excluded from Scoring / Direct Rejection)</h3>
+    <p style="font-size: 11pt; color: #CCC;">
+        Violations in this category break fundamental broadcasting standards and may cause media players to crash. Even if a file achieves a score of 99, containing any of the following errors triggers an immediate <b>REJECTED</b> status:
+    </p>
+    <ul style="font-size: 11pt; color: #CCC; line-height: 1.6;">
+        <li><b>Timecode Overlapping:</b> A subtitle block starting before the preceding one ends.</li>
+        <li><b>Multi-Line Violation:</b> 3 or more lines appearing in a single block on screen.</li>
+        <li><b>Negative Duration (Temporal Paradox):</b> A block's end time occurring earlier than its start time.</li>
+    </ul>
+
+    <h3 style="color: #FF9500; font-size: 12pt; margin-top: 15px;">🔴 CATEGORY 1: Readability and Flow (Maximum 50 Points)</h3>
+    <p style="font-size: 11pt; color: #CCC;">
+        Measures the viewer's ability to comfortably read the text without breaking away from the film's tempo.
+    </p>
+    <ul style="font-size: 11pt; color: #CCC; line-height: 1.6;">
+        <li><b>CPS Violation:</b> Exceeding the reading speed limit (Characters Per Second).</li>
+        <li><b>Flash Subtitles:</b> Lines remaining on screen too briefly for human cognitive absorption (e.g., &lt; 0.7s).</li>
+        <li><b>Zombie Subtitles:</b> Lines lingering on screen unnecessarily long (e.g., &gt; 7s).</li>
+    </ul>
+
+    <h3 style="color: #FFCC00; font-size: 12pt; margin-top: 15px;">🟡 CATEGORY 2: Visual Comfort and Placement (Maximum 35 Points)</h3>
+    <p style="font-size: 11pt; color: #CCC;">
+        Evaluates the screen real estate occupied by text and its propensity to cause visual fatigue.
+    </p>
+    <ul style="font-size: 11pt; color: #CCC; line-height: 1.6;">
+        <li><b>CPL Violation:</b> Exceeding the maximum characters per line limit (Characters Per Line).</li>
+        <li><b>Frame Gap Violation:</b> Insufficient gap (e.g., &lt; 24ms) between consecutive subtitles causing visual flicker.</li>
+        <li><b>Pyramid (Line Balance) Violation:</b> Excessive disparity in character length between top and bottom lines in two-line blocks (vertical imbalance).</li>
+    </ul>
+
+    <h3 style="color: #34C759; font-size: 12pt; margin-top: 15px;">🟢 CATEGORY 3: Typographic Hygiene (Maximum 15 Points)</h3>
+    <p style="font-size: 11pt; color: #CCC;">
+        Inspects the typographic craftsmanship of the file. Deductions are flat penalties per violation rather than ratio-based.
+    </p>
+    <ul style="font-size: 11pt; color: #CCC; line-height: 1.6;">
+        <li>Unnecessary double spaces between words.</li>
+        <li>Illegal whitespace preceding punctuation marks.</li>
+        <li>Unclosed or malformed HTML formatting tags (<code>&lt;i&gt;</code>, <code>&lt;b&gt;</code>, etc.).</li>
+        <li>Ellipsis (...) misuse or non-standard symbol exploitation.</li>
+    </ul>
+</div>""",
+                "rep_title": "⚙️ nCheck v0.7 Subtitle Technical Analysis Report\n",
                 "rep_file": "**Target File (TR):** ",
                 "rep_total_lines": "**Total Lines:** ",
                 "rep_violations": "📊 Violation Rates and Deductions\n",
@@ -372,47 +525,7 @@ class GemSubtitleProcessor(QMainWindow):
                 "rep_cat3_title": "🟢 CATEGORY 3: TYPOGRAPHIC HYGIENE (Max 15 Points)\n",
                 "rep_cat3_typo": "  * Blocks with Typographic Errors: {0} (Penalty: -{1:.1f})\n",
                 "rep_cat3_score": "  -> Category 3 Score: {0:.1f} / 15\n\n",
-                "manifesto": """
-<h2 style='color: #007AFF;'>nCheck Quality Evaluation Manifesto (MQM Based)</h2>
-<p>nCheck completely rejects the logic of random point deductions or "arbitrary coefficients" when evaluating subtitle files (SRT/ASS). The foundation of its scoring algorithm is based on the MQM (Multidimensional Quality Metrics) standards used by the global broadcasting industry (Netflix, Disney, EBU).</p>
-<p>The final score out of 100 that a file receives is divided into three main centers of gravity (50%, 35%, 15%) based on the viewer's cognitive capacity, the visual ergonomics of the screen, and the typographic craftsmanship of the text. Furthermore, there is a "Zero Tolerance" mechanism that operates independently of the score.</p>
-<p>You can review the matrix below to understand how and on what basis your labor is evaluated:</p>
-<br>
-<h3 style='color: #FF3B30;'>⛔ CATEGORY 0: Execution Board (MQM: Critical / Fatal Error)</h3>
-<p><b>Weight: Excluded from Scoring (Direct Rejection)</b></p>
-<p>Violations in this category target the direct playability and basic broadcasting standards of the subtitle, rather than its readability. Even if a file scores 99, if it contains one of the following errors, it receives a red card from the system and falls into the "REJECTED" status.</p>
-<ul>
-<li><b>Timecode Overlap:</b> A subtitle starting before the previous one ends.</li>
-<li><b>Multiple Line Violation:</b> Having 3 or more lines in a single block on the screen.</li>
-</ul>
-<br>
-<h3 style='color: #FF9500;'>🔴 CATEGORY 1: Readability and Flow (MQM: Major / Major Error)</h3>
-<p><b>Weight: 50% of Total Score (Maximum 50 Points)</b></p>
-<p>The existential purpose of a subtitle is to be read by the viewer without breaking away from the tempo of the film. If the viewer's eyes cannot catch up with the text, no other element matters.</p>
-<ul>
-<li><b>CPS (Reading Speed) Violation:</b> Exceeding the maximum limit of characters read per second (according to the selected language profile). Violations make heavy deductions from this 50-point slice based on their ratios.</li>
-<li><b>Flash and Zombie Subtitles:</b> Texts that remain on the screen for too short a time for the human eye to perceive (e.g., under 0.7s) or unnecessarily long (e.g., over 7s).</li>
-</ul>
-<br>
-<h3 style='color: #FFCC00;'>🟡 CATEGORY 2: Visual Comfort and Placement (MQM: Major-Minor / Medium Level Error)</h3>
-<p><b>Weight: 35% of Total Score (Maximum 35 Points)</b></p>
-<p>Even if the text is at a comfortably readable speed, the area it covers on the screen and its potential to strain the eyes are evaluated in this category.</p>
-<ul>
-<li><b>CPL (Line Width) Violation:</b> Exceeding the limits of the number of characters per line. Long lines throw the viewer's eyes from one end of the screen to the other.</li>
-<li><b>Frame Gap Violation:</b> Not leaving enough millisecond gaps between two consecutive subtitles creates a flicker sensation on the screen.</li>
-<li><b>Line Balance (Pyramid Rule):</b> Having a massive gap between the character counts of the upper and lower lines in two-line blocks. It causes the eye to make an unbalanced vertical jump while reading the text.</li>
-</ul>
-<br>
-<h3 style='color: #34C759;'>🟢 CATEGORY 3: Typographic Hygiene and Craftsmanship (MQM: Minor / Minor Error)</h3>
-<p><b>Weight: 15% of Total Score (Maximum 15 Points)</b></p>
-<p>These are the details that show the artisan side of the translator in a text with perfect timing and flow. The translation does not fall into the "Mediocre" status, but the roughness that prevents it from reaching the "Archive" level is punished here. This category works with fixed (flat) penalties instead of ratio calculation.</p>
-<ul>
-<li><b>Double Spaces:</b> Clunky and unnecessary spaces left between words.</li>
-<li><b>Punctuation Errors:</b> Spaces left before commas or periods.</li>
-<li><b>Broken Tags:</b> HTML tags that are opened (e.g., &lt;i&gt;) but not closed, or applied incorrectly.</li>
-<li><b>Symbol Exploitation:</b> Illegal symbol uses, such as using three single dots instead of an ellipsis.</li>
-</ul>
-"""
+                "manifesto": ""
             }
         }
 
@@ -531,6 +644,17 @@ class GemSubtitleProcessor(QMainWindow):
         self.process_button.setStyleSheet("QPushButton { background-color: #FF9500; } QPushButton:hover { background-color: #FFA522; }")
         self.process_button.setEnabled(False)
         self.process_button.clicked.connect(self.start_technical_analysis)
+
+        self.fix_button = QPushButton("🛠️ Otomatik Onar")
+        self.fix_button.setFont(QFont("Segoe UI Variable", 14, QFont.Bold))
+        self.fix_button.setMinimumHeight(45)
+        self.fix_button.setStyleSheet("""
+            QPushButton { background-color: #5856D6; color: #FFFFFF; }
+            QPushButton:hover { background-color: #6C6AE4; }
+            QPushButton:disabled { background-color: #2C2C35; color: #555565; }
+        """)
+        self.fix_button.setEnabled(False)
+        self.fix_button.clicked.connect(self.start_auto_fix)
         
         self.clear_btn = QPushButton("Yeni / Temizle")
         self.clear_btn.setFont(QFont("Segoe UI Variable", 12, QFont.Bold))
@@ -545,6 +669,7 @@ class GemSubtitleProcessor(QMainWindow):
         self.open_folder_btn.clicked.connect(self.open_output_folder)
         
         self.action_buttons_layout.addWidget(self.process_button, stretch=2)
+        self.action_buttons_layout.addWidget(self.fix_button, stretch=2)
         self.action_buttons_layout.addWidget(self.clear_btn, stretch=1)
         self.action_buttons_layout.addWidget(self.open_folder_btn, stretch=1)
         
@@ -572,8 +697,10 @@ class GemSubtitleProcessor(QMainWindow):
         self.save_html_btn.setEnabled(False)
         self.tech_header_layout.addWidget(self.save_html_btn)
         
-        self.tech_text = QTextEdit()
+        self.tech_text = QTextBrowser()
         self.tech_text.setReadOnly(True)
+        self.tech_text.setOpenLinks(False)
+        self.tech_text.anchorClicked.connect(self.handle_link_click)
         self.tech_text.setFont(QFont("Consolas", 12))
         self.tech_text.setStyleSheet("QTextEdit { background-color: #111115; color: #30D158; padding: 15px; border-radius: 10px; border: 1px solid #2A2A35;}")
         
@@ -592,8 +719,10 @@ class GemSubtitleProcessor(QMainWindow):
         self.history_list.itemSelectionChanged.connect(self.on_history_selected)
         
         self.history_detail_layout = QVBoxLayout()
-        self.history_detail_text = QTextEdit()
+        self.history_detail_text = QTextBrowser()
         self.history_detail_text.setReadOnly(True)
+        self.history_detail_text.setOpenLinks(False)
+        self.history_detail_text.anchorClicked.connect(self.handle_link_click)
         self.history_detail_text.setFont(QFont("Consolas", 11))
         
         
@@ -632,8 +761,7 @@ class GemSubtitleProcessor(QMainWindow):
         self.about_layout = QVBoxLayout(self.about_tab)
         self.about_text = QTextEdit()
         self.about_text.setReadOnly(True)
-        self.about_text.setStyleSheet("border: none; font-size: 16pt; line-height: 1.8; margin: 40px; background: transparent;")
-        self.about_text.setAlignment(Qt.AlignCenter)
+        self.about_text.setStyleSheet("border: none; font-size: 11pt; line-height: 1.6; margin: 20px; background: transparent;")
         self.about_layout.addWidget(self.about_text)
         self.tabs.addTab(self.about_tab, "")
 
@@ -681,6 +809,26 @@ class GemSubtitleProcessor(QMainWindow):
         self.history_delete_btn.setEnabled(True)
         if hasattr(self, 'history_save_btn'): self.history_save_btn.setEnabled(True)
 
+
+    def handle_link_click(self, url):
+        url_str = url.toString()
+        if "ncheck://sub/" in url_str:
+            import urllib.parse
+            from PyQt5.QtWidgets import QToolTip
+            from PyQt5.QtGui import QCursor
+            
+            try:
+                encoded_text = url_str.split("ncheck://sub/")[1]
+                sub_text = urllib.parse.unquote(encoded_text)
+                
+                # HTML formatting for the tooltip
+                formatted = f"<div style='padding: 5px; font-size: 11pt; color: #111111; font-weight: bold;'>{sub_text}</div>"
+                QToolTip.showText(QCursor.pos(), formatted)
+            except Exception as e:
+                pass
+        else:
+            import webbrowser
+            webbrowser.open(url_str)
 
     def save_html_report(self, is_history=False):
         import os
@@ -766,11 +914,12 @@ class GemSubtitleProcessor(QMainWindow):
         self.tech_header_lbl.setText(self.get_text("lbl_analysis_results"))
         self.clear_btn.setText(self.get_text("btn_clear"))
         self.open_folder_btn.setText(self.get_text("btn_open_folder"))
+        if hasattr(self, 'fix_button'): self.fix_button.setText(self.get_text("btn_auto_fix"))
         self.history_delete_btn.setText(self.get_text("btn_delete_history"))
         if hasattr(self, 'save_html_btn'): self.save_html_btn.setText(self.get_text("btn_save_html"))
         if hasattr(self, 'history_save_btn'): self.history_save_btn.setText(self.get_text("btn_save_html"))
         self.history_clear_all_btn.setText(self.get_text("btn_clear_history"))
-        self.about_text.setHtml(f"<div align='center'>{self.get_text('about_body')}</div><hr style='border: 1px solid #333; margin: 30px 0;'><div style='text-align: left; font-size: 14pt;'>{self.get_text('manifesto')}</div>")
+        self.about_text.setHtml(self.get_text('about_body'))
 
     def get_text(self, key):
         if key in self.lang_dict[self.current_lang]:
@@ -783,10 +932,14 @@ class GemSubtitleProcessor(QMainWindow):
             self.process_button.setEnabled(True)
             self.process_button.setText(self.get_text("btn_process_only_tech"))
             self.process_button.setStyleSheet("QPushButton { background-color: #0A84FF; } QPushButton:hover { background-color: #007AFF; }")
+            if hasattr(self, 'fix_button'):
+                self.fix_button.setEnabled(False)
         else:
             self.process_button.setEnabled(False)
             self.process_button.setText(self.get_text("btn_load_tr_prompt"))
             self.process_button.setStyleSheet("QPushButton { background-color: #333333; color: #777777; }")
+            if hasattr(self, 'fix_button'):
+                self.fix_button.setEnabled(False)
 
     def _read_ass_as_srt(self, file_path):
         try:
@@ -929,11 +1082,24 @@ class GemSubtitleProcessor(QMainWindow):
         
         def make_accordion(title, indices):
             if not indices: return ""
-            idx_str = ", ".join(map(str, indices))
+            import urllib.parse
+            
+            idx_html_list = []
+            for idx in indices:
+                sub_text = stats.get('sub_texts', {}).get(str(idx), '')
+                if sub_text:
+                    url_encoded = urllib.parse.quote(sub_text)
+                    link_html = f'<a href="ncheck://sub/{url_encoded}" onclick="showSubText(\'{idx}\'); return false;" title="Tıkla ve Görüntüle" class="clickable-idx" style="color: #64d2ff; font-weight: bold; text-decoration: none; border-bottom: 1px dotted #64d2ff; padding-bottom: 1px;">{idx}</a>'
+                    idx_html_list.append(link_html)
+                else:
+                    idx_html_list.append(str(idx))
+                    
+            idx_str = ", ".join(idx_html_list)
+            
             return f'''
             <div style='margin-top: 12px; background: rgba(0,0,0,0.2); padding: 10px; border-radius: 5px; display: block;'>
                 <div style='font-weight: bold; color: #007AFF; margin-bottom: 5px;'>{title} ({len(indices)} {txt_blocks})</div>
-                <div style='word-wrap: break-word; font-family: Consolas; font-size: 10pt; color: #AAA; padding-top: 5px; border-top: 1px solid #333;'>
+                <div style='word-wrap: break-word; font-family: Consolas; font-size: 10pt; color: #AAA; padding-top: 5px; border-top: 1px solid #333; line-height: 1.5;'>
                     {txt_indices} {idx_str}
                 </div>
             </div>
@@ -971,7 +1137,7 @@ class GemSubtitleProcessor(QMainWindow):
             </div>
             '''
             
-        txt_rep_title = "nCheck v0.6 Subtitle Technical Analysis Report" if is_en else "nCheck v0.6 Alt Yazı Teknik Analiz Raporu"
+        txt_rep_title = "nCheck v0.7 Subtitle Technical Analysis Report" if is_en else "nCheck v0.7 Alt Yazı Teknik Analiz Raporu"
         txt_target_file = "Target File:" if is_en else "Hedef Dosya:"
         txt_total_lines = "Total Lines (Blocks):" if is_en else "Toplam Satır (Blok) Sayısı:"
         txt_final_score = "FINAL TECHNICAL SCORE (nCheck Standard):" if is_en else "NİHAİ TEKNİK SKOR (nCheck Standartı):"
@@ -1035,6 +1201,50 @@ class GemSubtitleProcessor(QMainWindow):
     </div>
 </div>'''
 
+
+        import json
+        sub_data_json = json.dumps(stats.get('sub_texts', {}))
+
+        interactive_script = f'''
+        <style>
+            .clickable-idx {{ cursor: pointer; transition: background 0.2s; }}
+            .clickable-idx:hover {{ background: rgba(100, 210, 255, 0.2); color: #fff !important; }}
+            #subModal {{
+                display: none; position: fixed; z-index: 1000; left: 50%; top: 50%; transform: translate(-50%, -50%);
+                background-color: #2c2c2e; border: 1px solid #3a3a3c; border-radius: 12px; padding: 25px; 
+                box-shadow: 0 10px 30px rgba(0,0,0,0.8); color: #ebebf5; min-width: 320px; max-width: 80%; font-family: 'Segoe UI', sans-serif;
+            }}
+            #subModalOverlay {{
+                display: none; position: fixed; z-index: 999; left: 0; top: 0; width: 100%; height: 100%; 
+                background: rgba(0,0,0,0.7); backdrop-filter: blur(3px);
+            }}
+        </style>
+        
+        <div id="subModalOverlay" onclick="closeSubText()"></div>
+        <div id="subModal">
+            <h3 id="subModalTitle" style="color: #64d2ff; margin-top:0; border-bottom: 1px solid #3a3a3c; padding-bottom: 10px;">Satır Detayı</h3>
+            <div id="subModalContent" style="font-size: 18px; margin: 20px 0; font-weight: bold; color: #ffffff;"></div>
+            <button onclick="closeSubText()" style="background: #0a84ff; color: white; border: none; padding: 10px 20px; border-radius: 8px; cursor: pointer; float: right; font-weight: bold;">Kapat</button>
+            <div style="clear: both;"></div>
+        </div>
+
+        <script>
+            const subData = {sub_data_json};
+            function showSubText(idx) {{
+                const text = subData[idx] || "Metin bulunamadı.";
+                document.getElementById('subModalTitle').innerText = "Blok İndeksi: " + idx;
+                document.getElementById('subModalContent').innerHTML = text;
+                document.getElementById('subModalOverlay').style.display = 'block';
+                document.getElementById('subModal').style.display = 'block';
+            }}
+            function closeSubText() {{
+                document.getElementById('subModalOverlay').style.display = 'none';
+                document.getElementById('subModal').style.display = 'none';
+            }}
+        </script>
+        '''
+
+        dashboard_html += interactive_script
         return dashboard_html
 
     def analyze_technical(self, file_path):
@@ -1291,7 +1501,8 @@ class GemSubtitleProcessor(QMainWindow):
             'pyramid_indices': pyramid_indices,
             'typo_indices': typo_indices,
             'total_lines': total_lines,
-            'industry_badges': industry_badges
+            'industry_badges': industry_badges,
+            'sub_texts': {str(i+1): sub.text.replace(chr(10), '<br>').replace('"', '&quot;').replace("'", "&#39;") for i, sub in enumerate(subs)}
         }
         
         return stats, round(final_score, 1), cat0_violations > 0
@@ -1345,6 +1556,45 @@ class GemSubtitleProcessor(QMainWindow):
         self.tabs.setCurrentIndex(1)
         if show_msg:
             QMessageBox.information(self, "nCheck", self.get_text("msg_success_body"))
+
+        # Analiz bittiğinde Öncesi/Sonrası etkisi için Otomatik Onar butonunu aktif et
+        if hasattr(self, 'fix_button'):
+            self.fix_button.setEnabled(True)
+
+    def start_auto_fix(self):
+        if not hasattr(self, 'tr_drop_box') or not self.tr_drop_box.file_path:
+            QMessageBox.warning(self, "Uyarı", "Onarılacak altyazı dosyası bulunamadı.")
+            return
+
+        current_file = self.tr_drop_box.file_path
+        if not os.path.isfile(current_file):
+            QMessageBox.warning(self, "Hata", f"Dosya bulunamadı:\n{current_file}")
+            return
+
+        try:
+            # 1. nFixer çağır ve çalıştır
+            fixer = nFixer(file_path=current_file)
+            clean_subs = fixer.run_all()
+
+            # 2. [OrijinalDosyaAdi]_Fixed.srt formatında kaydet
+            base_name, _ = os.path.splitext(current_file)
+            if base_name.endswith("_Fixed"):
+                fixed_file_path = f"{base_name}.srt"
+            else:
+                fixed_file_path = f"{base_name}_Fixed.srt"
+
+            clean_subs.save(fixed_file_path, encoding='utf-8')
+
+            # 3. Drop box dosya yolunu ve arayüz metnini güncelle
+            self.tr_drop_box.file_path = fixed_file_path
+            self.tr_drop_box.refresh_text()
+            self.tr_drop_box.update_style(False)
+
+            # 4. Otomatik olarak teknik analizi çağır (Öncesi/Sonrası şoku)
+            self.start_technical_analysis(show_msg=True)
+
+        except Exception as e:
+            QMessageBox.critical(self, "Onarım Hatası", f"Otomatik onarım sırasında bir hata oluştu:\n{str(e)}")
 
 
     def open_output_folder(self):

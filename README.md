@@ -1,4 +1,4 @@
-# 🎬 nCheck v0.6 - Autonomous Subtitle Technical Quality Control Panel
+# 🎬 nCheck v0.7 - Autonomous Subtitle Technical Quality Control Panel
 
 > **Technical inspection engine for SRT and ASS subtitle files based on MQM (Multidimensional Quality Metrics) standards.**
 
@@ -8,11 +8,12 @@
 
 ![nCheck Interface](assets/interface1.png)
 ![nCheck Interface](assets/interface2.png)
+![nCheck Interface](assets/interface3.png)
 
 ## 📌 Overview
 
 **Developer:** nutuzar
-**Version:** v0.6 (Stable)
+**Version:** v0.7 (Stable)
 **License:** GPL-3.0
 
 nCheck is a quality control (QC) tool that audits the technical compliance of SRT and ASS subtitle files according to international broadcasting standards (MQM). It does not interfere with the semantic or grammatical quality of the translation; its focus is strictly on readability, visual ergonomics, and technical layout.
@@ -24,6 +25,7 @@ Designed for those building massive subtitle archives, translators, and users lo
 ## 🚀 Core Features
 
 * **Autonomous Multi-Layered Analysis:** The moment a file is dragged and dropped, it scans thousands of lines within milliseconds. While calculating an artisan quality score out of 100 based on the nCheck standard (19.5 CPS, 42 CPL, 84ms gap, 833ms minimum duration), it simultaneously performs an industrial compliance (Pass/Fail) audit according to the strict broadcasting standards of global platforms such as Netflix, Amazon, EBU, and OpenSubtitles.
+* **Autonomous Repair Engine: It doesn't just report errors; thanks to the integrated "Auto Fix" button, it resolves detected structural issues with a single click. Operating on deterministic mathematics, this three-phase engine cleans up typographic clutter, geometrically recenters long or unbalanced pyramid lines, and applies safe 84ms gaps along with smart CPS stretching (to the extent possible) without breaking sync. It never alters the literary meaning or the vocabulary of the text; it merely performs mechanical adjustments to bring your file closer to MQM standards.
 * **Language-Agnostic Architecture & JSON Flexibility:** If you wish to use different technical limits for source files in other languages (e.g., German), you can effortlessly add these values as a new profile directly into the core JSON dictionary (INDUSTRY_PROFILES) of the system within seconds.
 
 ---
